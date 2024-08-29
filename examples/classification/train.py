@@ -48,21 +48,10 @@ def print_cls_results(oa, macc, accs, epoch, cfg):
 
 
 def main(gpu, cfg, profile=False):
-    if cfg.distributed:
-        if cfg.mp:
-            cfg.rank = gpu
-        dist.init_process_group(backend=cfg.dist_backend,
-                                init_method=cfg.dist_url,
-                                world_size=cfg.world_size,
-                                rank=cfg.rank)
-        dist.barrier()
+    
     # logger
     setup_logger_dist(cfg.log_path, cfg.rank, name=cfg.dataset.common.NAME)
-    if cfg.rank == 0 :
-        Wandb.launch(cfg, cfg.wandb.use_wandb)
-        writer = SummaryWriter(log_dir=cfg.run_dir)
-    else:
-        writer = None
+
     set_random_seed(cfg.seed + cfg.rank, deterministic=cfg.deterministic)
     torch.backends.cudnn.enabled = True
     logging.info(cfg)
@@ -95,7 +84,7 @@ def main(gpu, cfg, profile=False):
                                            cfg.dataset,
                                            cfg.dataloader,
                                            datatransforms_cfg=cfg.datatransforms,
-                                           split='val',
+                                           split=cfg.dataset.val.split,
                                            distributed=cfg.distributed
                                            )
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
@@ -103,7 +92,7 @@ def main(gpu, cfg, profile=False):
                                             cfg.dataset,
                                             cfg.dataloader,
                                             datatransforms_cfg=cfg.datatransforms,
-                                            split='test',
+                                            split=cfg.dataset.test.split,
                                             distributed=cfg.distributed
                                             )
     num_classes = val_loader.dataset.num_classes if hasattr(
@@ -112,6 +101,7 @@ def main(gpu, cfg, profile=False):
         val_loader.dataset, 'num_points') else None
     if num_classes is not None:
         assert cfg.num_classes == num_classes
+    
     logging.info(f"number of classes of the dataset: {num_classes}, "
                  f"number of points sampled from dataset: {num_points}, "
                  f"number of points as model input: {cfg.num_points}")
@@ -190,41 +180,40 @@ def main(gpu, cfg, profile=False):
         lr = optimizer.param_groups[0]['lr']
         logging.info(f'Epoch {epoch} LR {lr:.6f} '
                      f'train_oa {train_oa:.2f}, val_oa {val_oa:.2f}, best val oa {best_val:.2f}')
-        if writer is not None:
-            writer.add_scalar('train_loss', train_loss, epoch)
-            writer.add_scalar('train_oa', train_macc, epoch)
-            writer.add_scalar('lr', lr, epoch)
-            writer.add_scalar('val_oa', val_oa, epoch)
-            writer.add_scalar('mAcc_when_best', macc_when_best, epoch)
-            writer.add_scalar('best_val', best_val, epoch)
-            writer.add_scalar('epoch', epoch, epoch)
-
+        
+        if cfg.wandb.use_wandb:
+            wandb.log({
+                "train_loss": train_loss,
+                "train_oa": train_macc,
+                "lr": lr,
+                "val_oa": val_oa,
+                "mAcc_when_best": macc_when_best,
+                "best_val": best_val,
+                "epoch": epoch
+            })
+     
         if cfg.sched_on_epoch:
             scheduler.step(epoch)
-        if cfg.rank == 0:
+
+        if is_best:
             save_checkpoint(cfg, model, epoch, optimizer, scheduler,
                             additioanl_dict={'best_val': best_val},
                             is_best=is_best
                             )
-    # test the last epoch
-    test_macc, test_oa, test_accs, test_cm = validate(model, test_loader, cfg)
-    print_cls_results(test_oa, test_macc, test_accs, best_epoch, cfg)
-    if writer is not None:
-        writer.add_scalar('test_oa', test_oa, epoch)
-        writer.add_scalar('test_macc', test_macc, epoch)
 
     # test the best validataion model
     best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(
         cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
     test_macc, test_oa, test_accs, test_cm = validate(model, test_loader, cfg)
-    if writer is not None:
-        writer.add_scalar('test_oa', test_oa, best_epoch)
-        writer.add_scalar('test_macc', test_macc, best_epoch)
     print_cls_results(test_oa, test_macc, test_accs, best_epoch, cfg)
+    if cfg.wandb.use_wandb:
+        wandb.log({
+            "test_oa": test_oa,
+            "test_macc": test_macc,
+            "epoch": epoch
+        })
 
-    if writer is not None:
-        writer.close()
-    dist.destroy_process_group()
+   
 
 def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
     loss_meter = AverageMeter()
@@ -234,7 +223,7 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
     model.train()  # set model to training mode
     pbar = tqdm(enumerate(train_loader), total=train_loader.__len__())
     num_iter = 0
-    for idx, data in pbar:
+    for idx, (fn, data) in pbar:
         for key in data.keys():
             data[key] = data[key].cuda(non_blocking=True)
         num_iter += 1
@@ -251,6 +240,8 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
             elif npoints == 4096:
                 point_all = 4800
             elif npoints == 8192:
+                point_all = 8192
+            elif npoints == 16384:
                 point_all = 8192
             else:
                 raise NotImplementedError()
@@ -295,7 +286,7 @@ def validate(model, val_loader, cfg):
     cm = ConfusionMatrix(num_classes=cfg.num_classes)
     npoints = cfg.num_points
     pbar = tqdm(enumerate(val_loader), total=val_loader.__len__())
-    for idx, data in pbar:
+    for idx, (fn, data) in pbar:
         for key in data.keys():
             data[key] = data[key].cuda(non_blocking=True)
         target = data['y']

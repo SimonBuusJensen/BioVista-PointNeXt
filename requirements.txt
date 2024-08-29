@@ -18,6 +18,8 @@ Cython==0.29.28
 pandas
 deepspeed
 shortuuid
+laspy               # For reading and writing .laz files of point cloud data
+laszip              # For compressing and decompressing .laz files
 
 # for docs
 mkdocs-material
