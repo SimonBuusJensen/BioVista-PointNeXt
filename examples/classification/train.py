@@ -161,45 +161,63 @@ def main(gpu, cfg, profile=False):
             train_loader.sampler.set_epoch(epoch)
         if hasattr(train_loader.dataset, 'epoch'):
             train_loader.dataset.epoch = epoch - 1
-        train_loss, train_macc, train_oa, _, _ = \
+        train_loss, train_macc, train_oa, _, train_cm = \
             train_one_epoch(model, train_loader,
                             optimizer, scheduler, epoch, cfg)
 
-        is_best = False
-        if epoch % cfg.val_freq == 0:
-            val_macc, val_oa, val_accs, val_cm = validate_fn(
-                model, val_loader, cfg)
-            is_best = val_oa > best_val
-            if is_best:
-                best_val = val_oa
-                macc_when_best = val_macc
-                best_epoch = epoch
-                logging.info(f'Find a better ckpt @E{epoch}')
-                print_cls_results(val_oa, val_macc, val_accs, epoch, cfg)
-
         lr = optimizer.param_groups[0]['lr']
-        logging.info(f'Epoch {epoch} LR {lr:.6f} '
-                     f'train_oa {train_oa:.2f}, val_oa {val_oa:.2f}, best val oa {best_val:.2f}')
-        
         if cfg.wandb.use_wandb:
             wandb.log({
                 "train_loss": train_loss,
-                "train_oa": train_macc,
+                "train_acc": train_macc,
+                "train_oa": train_oa,
                 "lr": lr,
+                "epoch": epoch
+            })
+
+        logging.info(f"Mean train acc (%): {train_macc:.1f}%, Train loss: {train_loss:.3f}, lr: {lr}")
+        for class_idx in range(train_cm.num_classes):
+            class_total_train = train_cm.actual[class_idx].item()
+            class_correct_train = train_cm.tp[class_idx].item()
+            class_acc_train = (class_correct_train / class_total_train) * 100 if class_total_train > 0 else 0
+            logging.info(f"Train: class {cfg.classes[class_idx]} (id: {class_idx}) correct: {class_correct_train}/{class_total_train} ({class_acc_train:.1f}%)")
+        
+        is_best = False
+        if epoch % cfg.val_freq == 0:
+            val_macc, val_oa, _, val_cm = validate_fn(
+                model, val_loader, cfg)
+            is_best = val_macc > best_val
+            if is_best:
+                best_val = val_macc
+                oa_when_best = val_macc
+                best_epoch = epoch
+                logging.info(f'Found new best ckpt at epoch: @E{epoch}')
+                save_checkpoint(cfg, model, epoch, optimizer, scheduler, additioanl_dict={'best_val': best_val}, is_best=is_best)
+
+            logging.info(f"Mean val acc (%): {val_macc:.1f}%, Val OA: {val_oa:.1f}%")
+            for class_idx in range(val_cm.num_classes):
+                class_total_val = val_cm.actual[class_idx].item()
+                class_correct_val = val_cm.tp[class_idx].item()
+                class_acc_val = (class_correct_val / class_total_val) * 100 if class_total_val > 0 else 0
+                logging.info(f"Val: class {cfg.classes[class_idx]} (id: {class_idx}) correct: {class_correct_val}/{class_total_val} ({class_acc_val:.1f}%)")
+                if cfg.wandb.use_wandb:
+                    wandb.log({
+                        f"val_acc_{cfg.classes[class_idx]}": class_acc_val,
+                        "epoch": epoch
+                    })
+
+
+        if cfg.wandb.use_wandb:
+            wandb.log({
+                "val_acc": val_macc,
                 "val_oa": val_oa,
-                "mAcc_when_best": macc_when_best,
-                "best_val": best_val,
+                "best_val_acc": best_val,
+                "oa_when_best": oa_when_best,
                 "epoch": epoch
             })
      
         if cfg.sched_on_epoch:
             scheduler.step(epoch)
-
-        if is_best:
-            save_checkpoint(cfg, model, epoch, optimizer, scheduler,
-                            additioanl_dict={'best_val': best_val},
-                            is_best=is_best
-                            )
 
     # test the best validataion model
     best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(
@@ -221,7 +239,7 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
     npoints = cfg.num_points
 
     model.train()  # set model to training mode
-    pbar = tqdm(enumerate(train_loader), total=train_loader.__len__())
+    pbar = tqdm(enumerate(train_loader), total=train_loader.__len__(), desc=f"Train Epoch [{epoch}/{cfg.epochs}]")
     num_iter = 0
     for idx, (fn, data) in pbar:
         for key in data.keys():
@@ -273,9 +291,10 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
         # update confusion matrix
         cm.update(logits.argmax(dim=1), target)
         loss_meter.update(loss.item())
-        if idx % cfg.print_freq == 0:
-            pbar.set_description(f"Train Epoch [{epoch}/{cfg.epochs}] "
-                                 f"Loss {loss_meter.val:.3f} Acc {cm.overall_accuray:.2f}")
+        # if idx % cfg.print_freq == 0:
+        #     macc, overallacc, accs = cm.all_acc()
+            # pbar.set_description(f"Train Epoch [{epoch}/{cfg.epochs}] "
+            #                      f"Loss {loss_meter.val:.3f} Acc {cm:.2f}")
     macc, overallacc, accs = cm.all_acc()
     return loss_meter.avg, macc, overallacc, accs, cm
 

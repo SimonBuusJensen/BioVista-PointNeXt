@@ -11,7 +11,7 @@ import torch
 class BioVista(Dataset):
 
     num_classes = 2
-    classes = ['low_biodiversity_potential_forest', 'high_biodiversity_potential_forest']
+    classes = ['low_bio', 'high_bio']
     gravity_dim = 2
 
     def __init__(self,
@@ -40,6 +40,9 @@ class BioVista(Dataset):
         assert split in ['train', 'test']
 
         self.df = self.df[self.df['dataset_split'] == split]
+        # Shuffle the dataframe
+        if split == 'train':
+            self.df = self.df.sample(frac=1).reset_index(drop=True)
 
         self.transform = transform
     
@@ -77,38 +80,63 @@ class BioVista(Dataset):
         x = np.array(laz_file.x).astype(np.float32)
         y = np.array(laz_file.y).astype(np.float32)
         z = np.array(laz_file.z).astype(np.float32)
+        intensity = laz_file.intensity
+        laz_class_ids = laz_file.classification
 
-        # Basic data points
-        points = [x, y, z]
-        # points = [x, y, z, laz_file.intensity]
+        # Basic data points, x, y, z, intensity and laz class id (not to be confused with the class id in the dataset)
+        points = [x, y, z, intensity, laz_class_ids]
 
-        # Convert to N x C format
+        # Convert to N x C format e.g. 1000 X 5 where 5 is x, y, z, intensity and laz class id
         points = np.vstack(points).transpose()
+        assert len(points) > 0, f"Point cloud {fn} is empty"
 
-        # Identify center of the point cloud
-        center_x, center_y = (np.max(points[:, 0]) + np.min(points[:, 0])) / 2, (np.max(points[:, 1]) + np.min(points[:, 1])) / 2
-        points = self.apply_circle_mask(points, self.radius, center_x, center_y)
+        # Remove the points which belong to class 7 (noise) or 18 (noise)
+        points = points[(points[:, 4] != 7) & (points[:, 4] != 18)]
+        # Remove the class id column
+        xyzi = points[:, :4]
 
-        # Select a random subset of points
-        if points.shape[0] > self.num_points:
-            idx = np.random.choice(points.shape[0], self.num_points, replace=False)
-            points = points[idx, :]
+        # Remove points which for whatever reason have a negative x, y or z value
+        xyzi = xyzi[xyzi[:, 0] > 0]
+        xyzi = xyzi[xyzi[:, 1] > 0]
+        xyzi = xyzi[xyzi[:, 2] > 0]
 
-        # Fill more points if the number of points is less than the required number of points
-        if points.shape[0] < self.num_points:
-            n_points_to_fill = self.num_points - points.shape[0]
-            idx = np.random.choice(points.shape[0], n_points_to_fill, replace=True)
-            points = np.concatenate([points, points[idx, :]], axis=0)
-            # print(f"Filling {n_points_to_fill} extra points into {fn}")
-    
+        # Identify center of the point cloud and apply a circular mask using Pythagoras theorem
+        center_x, center_y = (np.max(xyzi[:, 0]) + np.min(xyzi[:, 0])) / 2, (np.max(xyzi[:, 1]) + np.min(xyzi[:, 1])) / 2
+        xyzi = self.apply_circle_mask(xyzi, self.radius, center_x, center_y)
+
+        # Select a random subset of points given the self.num_points
+        if xyzi.shape[0] > self.num_points:
+            idx = np.random.choice(xyzi.shape[0], self.num_points, replace=False)
+            xyzi = xyzi[idx, :]
+
+        # Fill extra points into the points cloud if the number of points is less than the required number of points
+        if xyzi.shape[0] < self.num_points:
+            n_points_to_fill = self.num_points - xyzi.shape[0]
+            idx = np.random.choice(xyzi.shape[0], n_points_to_fill, replace=True)
+            xyzi = np.concatenate([xyzi, xyzi[idx, :]], axis=0)
+
         data = {
-            'pos': points,
+            'pos': xyzi[:,:3],
             'y': row["class_id"]
         }
 
+        # Apply the transform to the data 
+        # train: [PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
+        # val: [PointsToTensor, PointCloudXYZAlign]
         if self.transform is not None:
             data = self.transform(data)
 
-        data['x'] = torch.cat((data['pos'], torch.from_numpy(points[:, self.gravity_dim:self.gravity_dim+1] - points[:, self.gravity_dim:self.gravity_dim+1].min())), dim=1)
+        # Append the gravity dimension to the data (height of the point cloud)
+        point_heights = xyzi[:, self.gravity_dim:self.gravity_dim+1] - xyzi[:, self.gravity_dim:self.gravity_dim+1].min()
+        point_heights_tensor = torch.from_numpy(point_heights) # 8192 x 1
+
+        # Expand the dimension of the intensity from 8192 (1D) to 8192 x 1 (2D) and convert to tensor
+        intensity_tensor = torch.from_numpy(xyzi[:,3][:, np.newaxis])
+        
+        # Concatenate x, y, z, intensity and laz class id to the data['x']
+        data['x'] = torch.cat((data['pos'], point_heights_tensor, intensity_tensor), dim=1)
+
+        # Assert the data['x'] has the correct shape N x C=5
+        assert data['x'].shape[1] == 5, f"Data['x'] has shape {data['x'].shape} instead of N x C=5"
 
         return fn, data
