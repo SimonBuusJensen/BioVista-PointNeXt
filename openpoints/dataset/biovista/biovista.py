@@ -44,6 +44,13 @@ class BioVista(Dataset):
         if split == 'train':
             self.df = self.df.sample(frac=1).reset_index(drop=True)
 
+        # Select randomly a subset of the dataframe 2000 train and 1000 val
+        if split == 'train':
+            self.df = self.df.sample(2000)
+        else:
+            self.df = self.df.sample(1000)
+        print("WARNING: Using a subset of the dataset")
+
         self.transform = transform
     
     def apply_circle_mask(self, point_cloud_array, radius, center_x, center_y):
@@ -131,10 +138,10 @@ class BioVista(Dataset):
         point_heights_tensor = torch.from_numpy(point_heights) # 8192 x 1
 
         # Expand the dimension of the intensity from 8192 (1D) to 8192 x 1 (2D) and convert to tensor
-        intensity_tensor = torch.from_numpy(xyzi[:,3][:, np.newaxis])
+        # intensity_tensor = torch.from_numpy(xyzi[:,3][:, np.newaxis])
         
         # Concatenate x, y, z, intensity and laz class id to the data['x']
-        data['x'] = torch.cat((data['pos'], point_heights_tensor, intensity_tensor), dim=1)
+        data['x'] = torch.cat((data['pos'], point_heights_tensor), dim=1)
 
         # Assert the data['x'] has the correct shape N x C=5
         assert data['x'].shape[1] == 5, f"Data['x'] has shape {data['x'].shape} instead of N x C=5"

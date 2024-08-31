@@ -13,8 +13,10 @@ from openpoints.utils import EasyConfig, dist_utils, find_free_port, generate_ex
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+    parser.add_argument('--dataset_csv', type=str, help='dataset csv file', default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset.csv")
     parser.add_argument('--profile', action='store_true', default=False, help='set to True to profile speed')
     parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=8192)
+    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=100)
     parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=4)
     parser.add_argument("--batch_size_val", type=int, help="Batch size for training", default=4)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.001)
@@ -29,6 +31,9 @@ if __name__ == "__main__":
     if cfg.seed is None:
         cfg.seed = np.random.randint(1, 10000)
 
+    if args.epochs is not None:
+        cfg.epochs = args.epochs
+
     if args.num_points is not None:
         cfg.dataset.train.num_points = args.num_points
         cfg.num_points = args.num_points
@@ -42,10 +47,15 @@ if __name__ == "__main__":
     if args.lr is not None:
         cfg.lr = args.lr
 
+    # Set the dataset csv file
+    cfg.dataset.common.data_root = args.dataset_csv
+    cfg.root_dir = os.path.join(os.path.dirname(args.dataset_csv), "experiments")
+
     # Parse the model name from the cfg file
     model_name = os.path.basename(args.cfg).split('.')[0]
     date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M")
     experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_batch-sz_{cfg.batch_size}_{cfg.num_points}_lr_{cfg.lr}"
+    
 
     if args.wandb:
         cfg.wandb.use_wandb = True
@@ -71,7 +81,6 @@ if __name__ == "__main__":
     for i, opt in enumerate(opts):
         if 'rank' not in opt and 'dir' not in opt and 'root' not in opt and 'pretrain' not in opt and 'path' not in opt and 'wandb' not in opt and '/' not in opt:
             opt_list.append(opt)
-    cfg.root_dir = os.path.join(cfg.root_dir, cfg.task_name)
     cfg.opts = '-'.join(opt_list)
 
     if cfg.mode in ['resume', 'val', 'test']:

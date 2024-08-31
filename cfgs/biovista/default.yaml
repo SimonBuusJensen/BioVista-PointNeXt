@@ -2,7 +2,7 @@
 dataset:
   common:
     NAME: BioVista # Name of the dataset see openpoint/datasets/ for list of available datasets. Should match with the class name in the dataset module.
-    data_root: /workspace/dataset/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset.csv
+    data_root: /workspace/datasets/test_3D_point_cloud_pipeline/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset.csv
   train:
     split: train
     num_points: 8192
