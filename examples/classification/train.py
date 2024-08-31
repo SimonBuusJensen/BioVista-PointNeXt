@@ -320,4 +320,5 @@ def validate(model, val_loader, cfg):
     if cfg.distributed:
         dist.all_reduce(tp), dist.all_reduce(count)
     macc, overallacc, accs = cm.cal_acc(tp, count)
+    #test
     return macc, overallacc, accs, cm
