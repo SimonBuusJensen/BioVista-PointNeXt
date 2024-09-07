@@ -15,11 +15,12 @@ if __name__ == "__main__":
     parser.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
     parser.add_argument('--dataset_csv', type=str, help='dataset csv file', default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset.csv")
     parser.add_argument('--profile', action='store_true', default=False, help='set to True to profile speed')
-    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=8192)
+    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=16384)
+    parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.5)
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=100)
-    parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=4)
-    parser.add_argument("--batch_size_val", type=int, help="Batch size for training", default=4)
-    parser.add_argument("--lr", type=float, help="Learning rate", default=0.001)
+    parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--batch_size_val", type=int, help="Batch size for training", default=None)
+    parser.add_argument("--lr", type=float, help="Learning rate", default=0.01)
     parser.add_argument("--wandb", type=bool, help="Whether to log to weights and biases", default=True)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-3D-ALS")
 
@@ -38,11 +39,16 @@ if __name__ == "__main__":
         cfg.dataset.train.num_points = args.num_points
         cfg.num_points = args.num_points
 
+    if args.qb_radius is not None:
+        cfg.model.encoder_args.radius = args.qb_radius
+
     if args.batch_size_train is not None:
         cfg.batch_size = args.batch_size_train
     
     if args.batch_size_val is not None:
         cfg.val_batch_size = args.batch_size_val
+    elif cfg.val_batch_size is None:
+        cfg.val_batch_size = cfg.batch_size
 
     if args.lr is not None:
         cfg.lr = args.lr
