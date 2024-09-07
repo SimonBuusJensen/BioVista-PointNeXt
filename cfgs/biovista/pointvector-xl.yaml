@@ -10,7 +10,7 @@ model:
     width: 64
     in_channels: 4
     expansion: 4
-    radius: 0.1
+    radius: 0.7
     nsample: 32 
     flag: 1 #means s3dis
     aggr_args:
