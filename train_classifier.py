@@ -20,7 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=100)
     parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=2)
     parser.add_argument("--batch_size_val", type=int, help="Batch size for training", default=None)
-    parser.add_argument("--lr", type=float, help="Learning rate", default=0.01)
+    parser.add_argument("--lr", type=float, help="Learning rate", default=0.001)
     parser.add_argument("--wandb", type=bool, help="Whether to log to weights and biases", default=True)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-3D-ALS")
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # Parse the model name from the cfg file
     model_name = os.path.basename(args.cfg).split('.')[0]
     date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_batch-sz_{cfg.batch_size}_{cfg.num_points}_lr_{cfg.lr}"
+    experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_batch-sz_{cfg.batch_size}_{cfg.num_points}_lr_{cfg.lr}_qb-radius_{cfg.model.encoder_args.radius}"
     
 
     if args.wandb:
