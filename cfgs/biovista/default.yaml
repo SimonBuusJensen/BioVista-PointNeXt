@@ -18,7 +18,7 @@ batch_size: 2
 val_batch_size: 2
 
 dataloader:
-  num_workers: 0
+  num_workers: 4
 
 datatransforms:
   train: [PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
