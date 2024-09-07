@@ -34,4 +34,3 @@ model:
     norm_args:
       norm: 'bn'
 
-batch_size: 8
