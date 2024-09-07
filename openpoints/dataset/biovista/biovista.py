@@ -113,12 +113,12 @@ class BioVista(Dataset):
             xyzi = self.apply_circle_mask(xyzi, self.radius, center_x, center_y)
 
             # Select a random subset of points given the self.num_points
-            if xyzi.shape[0] > self.num_points:
+            if self.num_points is not None and xyzi.shape[0] >= self.num_points:
                 idx = np.random.choice(xyzi.shape[0], self.num_points, replace=False)
                 xyzi = xyzi[idx, :]
 
             # Fill extra points into the points cloud if the number of points is less than the required number of points
-            if xyzi.shape[0] < self.num_points:
+            if self.num_points is not None and xyzi.shape[0] < self.num_points:
                 n_points_to_fill = self.num_points - xyzi.shape[0]
                 idx = np.random.choice(xyzi.shape[0], n_points_to_fill, replace=True)
                 xyzi = np.concatenate([xyzi, xyzi[idx, :]], axis=0)
