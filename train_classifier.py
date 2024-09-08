@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument('--profile', action='store_true', default=False, help='set to True to profile speed')
     parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=8192)
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
-    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=100)
+    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=60)
     parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=2)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.001)
     parser.add_argument("--wandb", type=bool, help="Whether to log to weights and biases", default=True)
