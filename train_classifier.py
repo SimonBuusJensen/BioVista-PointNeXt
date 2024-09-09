@@ -12,13 +12,13 @@ from openpoints.utils import EasyConfig, dist_utils, find_free_port, generate_ex
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
-    parser.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+    parser.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-xl.yaml")
     parser.add_argument('--dataset_csv', type=str, help='dataset csv file', default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset.csv")
     parser.add_argument('--profile', action='store_true', default=False, help='set to True to profile speed')
     parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=8192)
-    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=100)
-    parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=4)
-    parser.add_argument("--batch_size_val", type=int, help="Batch size for training", default=4)
+    parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
+    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=60)
+    parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=2)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.001)
     parser.add_argument("--wandb", type=bool, help="Whether to log to weights and biases", default=True)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-3D-ALS")
@@ -38,11 +38,12 @@ if __name__ == "__main__":
         cfg.dataset.train.num_points = args.num_points
         cfg.num_points = args.num_points
 
+    if args.qb_radius is not None:
+        cfg.model.encoder_args.radius = args.qb_radius
+
     if args.batch_size_train is not None:
         cfg.batch_size = args.batch_size_train
-    
-    if args.batch_size_val is not None:
-        cfg.val_batch_size = args.batch_size_val
+        cfg.val_batch_size = cfg.batch_size
 
     if args.lr is not None:
         cfg.lr = args.lr
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     # Parse the model name from the cfg file
     model_name = os.path.basename(args.cfg).split('.')[0]
     date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_batch-sz_{cfg.batch_size}_{cfg.num_points}_lr_{cfg.lr}"
+    experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_batch-sz_{cfg.batch_size}_{cfg.num_points}_lr_{cfg.lr}_qb-radius_{cfg.model.encoder_args.radius}"
     
 
     if args.wandb:
@@ -96,6 +97,11 @@ if __name__ == "__main__":
         os.system('cp %s %s' % (args.cfg, cfg.run_dir))
     cfg.cfg_path = cfg_path
     cfg.wandb.name = cfg.run_name
+
+    # Add the cfg and log file to the wandb
+    if args.wandb:
+        wandb.save(cfg.cfg_path)
+        wandb.save(cfg.log_dir)
 
     if cfg.mode == 'pretrain':
         main = pretrain

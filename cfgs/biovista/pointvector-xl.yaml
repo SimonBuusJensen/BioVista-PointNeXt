@@ -3,16 +3,17 @@ model:
   NAME: BaseCls
   encoder_args:
     NAME: PointVectorEncoder
-    blocks: [1, 4, 7, 4, 4] 
-    strides: [1, 4, 4, 4, 4]
-    sa_layers: 1
-    sa_use_res: False 
-    width: 64
+    blocks: [1, 4, 7, 4, 4, 1]  # Added an extra block to match the structure of pointvector-s
+    strides: [1, 4, 4, 4, 4, 1]  # Added a stride of 1 for the last block
+    width: 32
     in_channels: 4
-    expansion: 4
+    sa_layers: 2
+    sa_use_res: True
     radius: 0.7
-    nsample: 32 
-    flag: 1 #means s3dis
+    radius_scaling: 1.5  # Added this parameter from pointvector-s
+    nsample: 32
+    expansion: 4
+    flag: 0  # Changed to 0 for classification task
     aggr_args:
       feature_type: 'dp_fj'
       reduction: 'max'
@@ -22,16 +23,13 @@ model:
     conv_args:
       order: conv-norm-act
     act_args:
-      act: 'relu'
+      act: 'leakyrelu'
     norm_args:
       norm: 'bn'
-  decoder_args:
-    NAME: PointVectorDecoder
-  cls_args:
+  cls_args: 
     NAME: ClsHead
-    num_classes: 2
-    in_channels: null
-    norm_args:
-      norm: 'bn'
+    num_classes: 2  # Assuming binary classification, adjust as needed
+    mlps: [512, 256]  # Added MLPs from pointvector-s
+    norm_args: 
+      norm: 'bn1d'
 
-batch_size: 8
