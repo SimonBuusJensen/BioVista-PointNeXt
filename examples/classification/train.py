@@ -227,7 +227,7 @@ def main(gpu, cfg, profile=False):
                 is_best = val_macc > best_val
                 if is_best:
                     best_val = val_macc
-                    oa_when_best = val_macc
+                    oa_when_best = val_oa
                     best_epoch = epoch
                     logging.info(f'Found new best ckpt at epoch: @E{epoch}')
                     save_checkpoint(cfg, model, epoch, optimizer, scheduler, additioanl_dict={'best_val': best_val}, is_best=is_best)
@@ -253,6 +253,13 @@ def main(gpu, cfg, profile=False):
                         f.write(f"Mean validation accuracy,{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{val_macc}\n")
                     f.close()
 
+                    if cfg.wandb.use_wandb:
+                        wandb.log({
+                            "best_val": best_val,
+                            "oa_when_best": oa_when_best,
+                            "epoch": epoch
+                        })
+
                 logging.info(f"Mean val acc (%): {val_macc:.1f}%, Val OA: {val_oa:.1f}%")
                 for class_idx in range(val_cm.num_classes):
                     class_total_val = val_cm.actual[class_idx].item()
@@ -270,8 +277,6 @@ def main(gpu, cfg, profile=False):
             wandb.log({
                 "val_acc": val_macc,
                 "val_oa": val_oa,
-                "best_val_acc": best_val,
-                "oa_when_best": oa_when_best,
                 "epoch": epoch
             })
      
