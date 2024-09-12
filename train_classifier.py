@@ -36,7 +36,9 @@ if __name__ == "__main__":
 
     if args.num_points is not None:
         cfg.dataset.train.num_points = args.num_points
-        cfg.num_points = args.num_points
+        cfg.datas.dataset.num_points
+        cfg.dataset.val.num_points = args.num_points
+        cfg.dataset.test.num_points = args.num_points
 
     if args.qb_radius is not None:
         cfg.model.encoder_args.radius = args.qb_radius
