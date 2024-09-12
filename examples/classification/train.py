@@ -255,7 +255,7 @@ def main(gpu, cfg, profile=False):
 
                     if cfg.wandb.use_wandb:
                         wandb.log({
-                            "best_val": best_val,
+                            "best_val_acc": best_val,
                             "oa_when_best": oa_when_best,
                             "epoch": epoch
                         })
