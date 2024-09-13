@@ -38,13 +38,13 @@ if __name__ == "__main__":
     argparse = argparse.ArgumentParser(description="Generate feature encodings for 3D Point clouds using a trained Point Vector Model")
     argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-xl.yaml")
     argparse.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                          default="/media/simon/Elements/BioVista/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset_original.csv")
+                          default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset_original.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/media/simon/Elements/BioVista/datasets/100_high_and_100_low_HNV-forest-proxy-samples/experiments/BioVista-2D-Orthophotos/BioVista-Orthophotos-Shape-Sizes/2024-08-27-13-30_BioVista-Orthophotos-Shape-Size_resnet50_640px_30m_circles/2024-08-27-13-30_resnet50_epoch_60_acc_78.46.pth")
+                          default="datasets/100_high_and_100_low_HNV-forest-proxy-samples/experiments/BioVista-3D-ALS_pointvector/2024-09-07-15-50_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7/checkpoint/2024-09-07-15-50_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7_ckpt_best.pth")
     argparse.add_argument("--save_dir", type=str, help="Path to save the encodings.", default=None)
     argparse.add_argument("--shape_size_meters", type=int, help="Shape size in meters.", default=30)
     argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=4)
-    argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=0)
+    argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
 
     args, opts = argparse.parse_known_args()
     cfg = EasyConfig()
@@ -78,3 +78,5 @@ if __name__ == "__main__":
     model = build_model_from_cfg(cfg.model)
     model_size = cal_model_parm_nums(model)
     print('Number of params: %.4f M' % (model_size / 1e6))
+
+    
