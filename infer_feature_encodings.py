@@ -41,7 +41,7 @@ if __name__ == "__main__":
     argparse = argparse.ArgumentParser(description="Generate feature encodings for 3D Point clouds using a trained Point Vector Model")
     argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-xl.yaml")
     argparse.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                          default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset_original.csv")
+                          default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset_without_empty_point_clouds.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
                           default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/experiments/BioVista-3D-ALS_pointvector/2024-09-07-15-50_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7/checkpoint/2024-09-07-15-50_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7_ckpt_best.pth")
     argparse.add_argument("--save_dir", type=str, help="Path to save the encodings.", default=None)
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=2)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=8192)
     argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
+    argparse.add_argument("--dataset_split", type=str, help="Dataset split to use for inference.", default="train")
 
     args, opts = argparse.parse_known_args()
     cfg = EasyConfig()
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     cfg.update(opts)
 
     # Parse the source and validate it
-    source = args.source
+    source = args.source    
     if not is_valid_source(source):
         raise ValueError(f"Invalid source {source}.")
 
@@ -69,10 +70,12 @@ if __name__ == "__main__":
     if source_is_file and source.endswith(".csv"):
         print(f"Reading image paths from {source}...")
         df = pd.read_csv(source)
+        dataset_split = args.dataset_split
+        assert dataset_split in ["train", "test"], "dataset_split must be one of ['train', 'test']"
         assert "dataset_split" in df.columns, "The csv file must contain a column 'dataset_split'."
 
         # Get rows with dataset_split == "test"
-        df = df[df["dataset_split"] == "test"]
+        df = df[df["dataset_split"] == dataset_split]
         print("-------------------------------------------------------------------")
         print("WARNING! only using the test samples in the csv file for inference.")
         print("-------------------------------------------------------------------")
@@ -119,10 +122,25 @@ if __name__ == "__main__":
                                            cfg.dataset,
                                            cfg.dataloader,
                                            datatransforms_cfg=cfg.datatransforms,
-                                           split="test",
+                                           split=dataset_split,
                                            distributed=False
                                            )
-    print("Number of samples in the validation set: ", len(val_loader.dataset))
+
+    # Filter away the samples which are already processed
+    df = val_loader.dataset.df.copy()
+    existing_files = list(os.listdir(save_dir))
+    missing_files = []
+    for idx, row in df.iterrows():
+        point_cloud_file_name = val_loader.dataset.file_name_from_row(row)
+        # replace .laz with .npy
+        point_cloud_file_name = point_cloud_file_name.replace(".laz", ".npy")
+        if point_cloud_file_name not in existing_files:
+            missing_files.append(row["id"])
+    print(f"Found {len(missing_files)} missing files in the dataset.")
+    df = df[df["id"].isin(missing_files)]
+    val_loader.dataset.df = df
+            
+    print(f"Number of samples in the {dataset_split} set: ", len(val_loader.dataset))
     model.to(device)
     model.eval()
     torch.backends.cudnn.enabled = True
