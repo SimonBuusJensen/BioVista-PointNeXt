@@ -84,7 +84,7 @@ def save_checkpoint(cfg, model, epoch, optimizer=None, scheduler=None,
         logging.info("Saved in {}".format(milestone_pretrained_path))
 
     if is_best:
-        best_ckpt_name = f'{save_name}_ckpt_best.pth' if save_name else 'ckpt_best.pth'
+        best_ckpt_name = f'{save_name}_{epoch}_ckpt_best.pth' if save_name else 'ckpt_best.pth'
         best_pretrained_path = os.path.join(cfg.ckpt_dir, best_ckpt_name)
         shutil.copyfile(current_pretrained_path, best_pretrained_path)
         logging.info("Found the best model and saved in {}".format(best_pretrained_path))

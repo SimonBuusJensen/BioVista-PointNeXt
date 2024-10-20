@@ -37,7 +37,7 @@ class BioVista(Dataset):
 
         self.split = split
         # assert split is either train or val
-        assert split in ['train', 'test']
+        assert split in ['train', 'val', 'test']
 
         self.df = self.df[self.df['dataset_split'] == split]
         # Shuffle the dataframe
@@ -68,8 +68,11 @@ class BioVista(Dataset):
     def file_name_from_row(self, row):
         id = row["id"]
         ogc_fid = row["ogc_fid"]
+        year = row["year"]
         class_name = row["class_name"].replace(" ", "_").lower()
-        fn = f"id_{id}_ogc_fid_{ogc_fid}_{class_name}_point_frac_1_30m.laz"
+        fn = f"id_{id}_ogc_fid_{ogc_fid}_{class_name}_year_{year}_30m.laz"
+        # fn = f"id_{id}_ogc_fid_{ogc_fid}_{class_name}_point_frac_1_30m.laz"
+
         return fn
     
     def __getitem__(self, idx):

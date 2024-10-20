@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     argparse = argparse.ArgumentParser(description="Generate feature encodings for 3D Point clouds using a trained Point Vector Model")
-    argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-xl.yaml")
+    argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
     argparse.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
                           default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset_without_empty_point_clouds.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",

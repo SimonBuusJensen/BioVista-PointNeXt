@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     # Parse the model name from the cfg file
     model_name = os.path.basename(args.cfg).split('.')[0]
-    date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M")
+    date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_batch-sz_{cfg.batch_size}_{cfg.num_points}_lr_{cfg.lr}_qb-radius_{cfg.model.encoder_args.radius}"
     
 

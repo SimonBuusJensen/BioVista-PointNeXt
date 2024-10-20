@@ -144,6 +144,7 @@ def main(gpu, cfg, profile=False):
                 load_checkpoint_inv(model.encoder, cfg.pretrained_path)
     else:
         logging.info('Training from scratch')
+
     train_loader = build_dataloader_from_cfg(cfg.batch_size,
                                              cfg.dataset,
                                              cfg.dataloader,
@@ -250,12 +251,13 @@ def main(gpu, cfg, profile=False):
                         high_correct = val_cm.tp[1].item()
                         high_acc = (high_correct / high_total) * 100 if high_total > 0 else 0
                         f.write(f"High bio correct,{high_correct},{high_total},{high_acc}\n")
-                        f.write(f"Mean validation accuracy,{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{val_macc}\n")
+                        f.write(f"Overall validation accuracy,{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{val_oa}\n")
+                        f.write(f"Mean validation accuracy,,,{best_val}")
                     f.close()
 
                     if cfg.wandb.use_wandb:
                         wandb.log({
-                            "best_val_acc": best_val,
+                            "best_val_macc": best_val,
                             "oa_when_best": oa_when_best,
                             "epoch": epoch
                         })
@@ -277,6 +279,7 @@ def main(gpu, cfg, profile=False):
             wandb.log({
                 "val_acc": val_macc,
                 "val_oa": val_oa,
+                "val_macc": val_macc,
                 "epoch": epoch
             })
      
