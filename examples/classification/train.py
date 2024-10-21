@@ -88,19 +88,20 @@ def main(gpu, cfg, profile=False):
                                            distributed=cfg.distributed
                                            )
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
-    test_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
-                                            cfg.dataset,
-                                            cfg.dataloader,
-                                            datatransforms_cfg=cfg.datatransforms,
-                                            split=cfg.dataset.test.split,
-                                            distributed=cfg.distributed
-                                            )
+    # test_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
+    #                                         cfg.dataset,
+    #                                         cfg.dataloader,
+    #                                         datatransforms_cfg=cfg.datatransforms,
+    #                                         split=cfg.dataset.test.split,
+    #                                         distributed=cfg.distributed
+    #                                         )
     num_classes = val_loader.dataset.num_classes if hasattr(
         val_loader.dataset, 'num_classes') else None
     num_points = val_loader.dataset.num_points if hasattr(
         val_loader.dataset, 'num_points') else None
     if num_classes is not None:
         assert cfg.num_classes == num_classes
+
     
     logging.info(f"number of classes of the dataset: {num_classes}, "
                  f"number of points sampled from dataset: {num_points}, "
@@ -117,14 +118,14 @@ def main(gpu, cfg, profile=False):
             macc, oa, accs, cm = validate_fn(model, val_loader, cfg)
             print_cls_results(oa, macc, accs, cfg.start_epoch, cfg)
         else:
-            if cfg.mode == 'test':
-                # test mode
-                epoch, best_val = load_checkpoint(
-                    model, pretrained_path=cfg.pretrained_path)
-                macc, oa, accs, cm = validate_fn(model, test_loader, cfg)
-                print_cls_results(oa, macc, accs, epoch, cfg)
-                return True
-            elif cfg.mode == 'val':
+            # if cfg.mode == 'test':
+            #     # test mode
+            #     epoch, best_val = load_checkpoint(
+            #         model, pretrained_path=cfg.pretrained_path)
+            #     macc, oa, accs, cm = validate_fn(model, test_loader, cfg)
+            #     print_cls_results(oa, macc, accs, epoch, cfg)
+            #     return True
+            if cfg.mode == 'val':
                 # validation mode
                 epoch, best_val = load_checkpoint(model, cfg.pretrained_path)
                 macc, oa, accs, cm = validate_fn(model, val_loader, cfg)
@@ -152,6 +153,7 @@ def main(gpu, cfg, profile=False):
                                              split='train',
                                              distributed=cfg.distributed,
                                              )
+
     logging.info(f"length of training dataset: {len(train_loader.dataset)}")
 
     # ===> start training
@@ -197,7 +199,7 @@ def main(gpu, cfg, profile=False):
                 model.eval()  # set model to eval mode
 
                 # Set no grad for validation
-                
+                val_loss_meter = AverageMeter()
                 val_cm = ConfusionMatrix(num_classes=cfg.num_classes)
                 npoints = cfg.num_points
                 pbar = tqdm(enumerate(val_loader), total=val_loader.__len__())
@@ -209,8 +211,12 @@ def main(gpu, cfg, profile=False):
                     points = points[:, :npoints]
                     data['pos'] = points[:, :, :3].contiguous()
                     data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
-                    logits = model(data)
+
+                    # Forward pass
+                    logits, val_loss = model.get_logits_loss(data, target)
+
                     val_cm.update(logits.argmax(dim=1), target)
+                    val_loss_meter.update(val_loss.item()) # Update validation loss meter
 
                     # Save the predictions and labels
                     pred_list.extend(logits.argmax(dim=1).cpu().numpy())
@@ -262,7 +268,7 @@ def main(gpu, cfg, profile=False):
                             "epoch": epoch
                         })
 
-                logging.info(f"Mean val acc (%): {val_macc:.1f}%, Val OA: {val_oa:.1f}%")
+                logging.info(f"Mean val acc (%): {val_macc:.1f}%, Val loss: {val_loss_meter.avg:.4f}, Val OA: {val_oa:.1f}%")
                 for class_idx in range(val_cm.num_classes):
                     class_total_val = val_cm.actual[class_idx].item()
                     class_correct_val = val_cm.tp[class_idx].item()
@@ -278,6 +284,7 @@ def main(gpu, cfg, profile=False):
         if cfg.wandb.use_wandb:
             wandb.log({
                 "val_acc": val_macc,
+                "val_loss": val_loss_meter.avg,  # Log validation loss to wandb
                 "val_oa": val_oa,
                 "val_macc": val_macc,
                 "epoch": epoch
@@ -287,16 +294,16 @@ def main(gpu, cfg, profile=False):
             scheduler.step(epoch)
 
     # test the best validataion model
-    best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(
-        cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
-    test_macc, test_oa, test_accs, test_cm = validate(model, test_loader, cfg)
-    print_cls_results(test_oa, test_macc, test_accs, best_epoch, cfg)
-    if cfg.wandb.use_wandb:
-        wandb.log({
-            "test_oa": test_oa,
-            "test_macc": test_macc,
-            "epoch": epoch
-        })
+    # best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(
+    #     cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
+    # test_macc, test_oa, test_accs, test_cm = validate(model, test_loader, cfg)
+    # print_cls_results(test_oa, test_macc, test_accs, best_epoch, cfg)
+    # if cfg.wandb.use_wandb:
+    #     wandb.log({
+    #         "test_oa": test_oa,
+    #         "test_macc": test_macc,
+    #         "epoch": epoch
+    #     })
 
    
 
@@ -318,26 +325,26 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
         from openpoints.dataset import vis_points
         vis_points(data['pos'].cpu().numpy()[0])
         """
-        num_curr_pts = points.shape[1]
-        if num_curr_pts > npoints:  # point resampling strategy
-            if npoints == 1024:
-                point_all = 1200
-            elif npoints == 4096:
-                point_all = 4800
-            elif npoints == 8192:
-                point_all = 8192
-            elif npoints == 16384:
-                point_all = 16384
-            else:
-                raise NotImplementedError()
-            if  points.size(1) < point_all:
-                point_all = points.size(1)
-            fps_idx = furthest_point_sample(
-                points[:, :, :3].contiguous(), point_all)
-            fps_idx = fps_idx[:, np.random.choice(
-                point_all, npoints, False)]
-            points = torch.gather(
-                points, 1, fps_idx.unsqueeze(-1).long().expand(-1, -1, points.shape[-1]))
+        # num_curr_pts = points.shape[1]
+        # if num_curr_pts > npoints:  # point resampling strategy
+        #     if npoints == 1024:
+        #         point_all = 1200
+        #     elif npoints == 4096:
+        #         point_all = 4800
+        #     elif npoints == 8192:
+        #         point_all = 8192
+        #     elif npoints == 16384:
+        #         point_all = 16384
+        #     else:
+        #         raise NotImplementedError()
+        #     if  points.size(1) < point_all:
+        #         point_all = points.size(1)
+        #     fps_idx = furthest_point_sample(
+        #         points[:, :, :3].contiguous(), point_all)
+        #     fps_idx = fps_idx[:, np.random.choice(
+        #         point_all, npoints, False)]
+        #     points = torch.gather(
+        #         points, 1, fps_idx.unsqueeze(-1).long().expand(-1, -1, points.shape[-1]))
 
         data['pos'] = points[:, :, :3].contiguous()
         data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
@@ -370,8 +377,10 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
 def validate(model, val_loader, cfg):
     model.eval()  # set model to eval mode
     cm = ConfusionMatrix(num_classes=cfg.num_classes)
+    loss_meter = AverageMeter()
     npoints = cfg.num_points
     pbar = tqdm(enumerate(val_loader), total=val_loader.__len__())
+
     for idx, (fn, data) in pbar:
         for key in data.keys():
             data[key] = data[key].cuda(non_blocking=True)
@@ -380,8 +389,10 @@ def validate(model, val_loader, cfg):
         points = points[:, :npoints]
         data['pos'] = points[:, :, :3].contiguous()
         data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
-        logits = model(data)
+        logits, loss = model.get_logits_loss(data, target)
+        
         cm.update(logits.argmax(dim=1), target)
+        loss_meter.update(loss.item())  # Update validation loss meter
 
     tp, count = cm.tp, cm.count
     if cfg.distributed:

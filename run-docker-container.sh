@@ -1,1 +1,1 @@
-docker run --runtime=nvidia --gpus all --ipc=host -v /home/simon/aau/BioVista-PointNeXt/:/workspace/src -v /media/simon/Elements1/BioVista/datasets/:/workspace/datasets --name biovista-pointnext-container -it biovistapointnext:latest
+docker run --runtime=nvidia --gpus all --ipc=host -v /home/simon/aau/BioVista-PointNeXt/:/workspace/src -v /home/simon/data/BioVista/datasets/:/workspace/datasets --name biovista-pointnext-container-local-data -it biovistapointnext:latest

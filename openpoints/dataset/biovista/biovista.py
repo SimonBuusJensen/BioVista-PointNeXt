@@ -41,8 +41,8 @@ class BioVista(Dataset):
 
         self.df = self.df[self.df['dataset_split'] == split]
         # Shuffle the dataframe
-        # if split == 'train':
-            # self.df = self.df.sample(frac=1).reset_index(drop=True)
+        if split == 'train':
+            self.df = self.df.sample(frac=1).reset_index(drop=True)
 
         # Select randomly a subset of the dataframe 2000 train and 1000 val
         # if split == 'train':
