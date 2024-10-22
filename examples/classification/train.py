@@ -230,6 +230,7 @@ def main(gpu, cfg, profile=False):
 
                 tp, count = val_cm.tp, val_cm.count
                 val_macc, val_oa, _ = val_cm.cal_acc(tp, count)
+                save_checkpoint(cfg, model, epoch, optimizer, scheduler, additioanl_dict={'val_macc': val_macc})
 
                 is_best = val_macc > best_val
                 if is_best:
@@ -237,7 +238,6 @@ def main(gpu, cfg, profile=False):
                     oa_when_best = val_oa
                     best_epoch = epoch
                     logging.info(f'Found new best ckpt at epoch: @E{epoch}')
-                    save_checkpoint(cfg, model, epoch, optimizer, scheduler, additioanl_dict={'best_val': best_val}, is_best=is_best)
 
                     # Write the results to a csv file in cfg.run_dir
                     # Write the image_paths, predictions and labels to a csv file
