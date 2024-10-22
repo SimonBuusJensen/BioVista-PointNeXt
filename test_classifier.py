@@ -18,7 +18,7 @@ if __name__ == "__main__":
                         #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_wihtout_empty_clouds.csv")
                           default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_wihtout_empty_clouds.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/experiments/3D-PointVector-S/2024-10-22-08-31-38_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_1e-05_qb-radius_0.7/checkpoint/2024-10-22-08-31-38_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_1e-05_qb-radius_0.7_E1.pth")
+                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/experiments/3D-PointVector-S/2024-10-22-08-31-38_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_1e-05_qb-radius_0.7/checkpoint/2024-10-22-08-31-38_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_1e-05_qb-radius_0.7_E5.pth")
     argparse.add_argument("--shape_size_meters", type=int, help="Shape size in meters.", default=30)
     argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=2)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=8192)
