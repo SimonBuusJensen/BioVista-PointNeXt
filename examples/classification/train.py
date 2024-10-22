@@ -261,12 +261,12 @@ def main(gpu, cfg, profile=False):
                         f.write(f"Mean validation accuracy,,,{best_val}")
                     f.close()
 
-                    if cfg.wandb.use_wandb:
-                        wandb.log({
-                            "best_val_macc": best_val,
-                            "oa_when_best": oa_when_best,
-                            "epoch": epoch
-                        })
+                if cfg.wandb.use_wandb:
+                    wandb.log({
+                        "best_val_macc": best_val,
+                        "oa_when_best": oa_when_best,
+                        "epoch": epoch
+                    })
 
                 logging.info(f"Mean val acc (%): {val_macc:.1f}%, Val loss: {val_loss_meter.avg:.4f}, Val OA: {val_oa:.1f}%")
                 for class_idx in range(val_cm.num_classes):
