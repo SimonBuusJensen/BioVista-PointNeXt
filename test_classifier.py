@@ -16,9 +16,9 @@ if __name__ == "__main__":
     argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
     argparse.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
                         #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_wihtout_empty_clouds.csv")
-                          default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset_without_empty_point_clouds.csv")
+                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_wihtout_empty_clouds.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/experiments/BioVista-3D-ALS_pointvector/5_best_for_paper/2024-10-04-12-26_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7_1/checkpoint/2024-10-04-12-26_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7_ckpt_best.pth")
+                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/experiments/3D-PointVector-S/2024-10-21-12-30-08_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7/checkpoint/2024-10-21-12-30-08_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7_E12.pth")
     argparse.add_argument("--shape_size_meters", type=int, help="Shape size in meters.", default=30)
     argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=2)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=8192)
