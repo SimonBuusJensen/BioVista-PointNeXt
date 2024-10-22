@@ -89,9 +89,9 @@ class BioVista(Dataset):
             laz_file = laspy.read(fn)
         
             # Cast x, y and z to float32 (to save memory and speed up processing)
-            x = np.array(laz_file.x).astype(np.float64)
-            y = np.array(laz_file.y).astype(np.float64)
-            z = np.array(laz_file.z).astype(np.float64)
+            x = np.array(laz_file.x).astype(np.float32)
+            y = np.array(laz_file.y).astype(np.float32)
+            z = np.array(laz_file.z).astype(np.float32)
             intensity = laz_file.intensity
             laz_class_ids = laz_file.classification
 
