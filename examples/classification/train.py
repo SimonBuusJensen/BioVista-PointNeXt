@@ -188,6 +188,7 @@ def main(gpu, cfg, profile=False):
         VALIDATION
         """
         is_best = False
+        val_loss_meter = AverageMeter()
         if epoch % cfg.val_freq == 0:
             
             with torch.set_grad_enabled(False):
@@ -199,7 +200,6 @@ def main(gpu, cfg, profile=False):
                 model.eval()  # set model to eval mode
 
                 # Set no grad for validation
-                val_loss_meter = AverageMeter()
                 val_cm = ConfusionMatrix(num_classes=cfg.num_classes)
                 npoints = cfg.num_points
                 pbar = tqdm(enumerate(val_loader), total=val_loader.__len__())
