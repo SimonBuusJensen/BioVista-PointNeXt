@@ -41,12 +41,15 @@ if __name__ == "__main__":
     argparse = argparse.ArgumentParser(description="Generate feature encodings for 3D Point clouds using a trained Point Vector Model")
     argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
     argparse.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                          default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset_without_empty_point_clouds.csv")
+                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/tmp.csv")
+                        #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/high_and_low_HNV-forest-proxy-train-val-polygon-dataset_30_m_circles_dataset_without_empty_clouds.csv")
+                        #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_without_empty_clouds.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/workspace/datasets/100_high_and_100_low_HNV-forest-proxy-samples/experiments/BioVista-3D-ALS_pointvector/2024-09-07-15-50_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7/checkpoint/2024-09-07-15-50_BioVista-3D-ALS_pointvector-s_batch-sz_16_8192_lr_0.001_qb-radius_0.7_ckpt_best.pth")
-    argparse.add_argument("--save_dir", type=str, help="Path to save the encodings.", default=None)
+                          default="/workspace/datasets/final_results/3D-Airborne-Lidar-Scanner-PointVector-S/2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7/2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7_E4.pth")
+    argparse.add_argument("--save_dir", type=str, help="Path to save the encodings.", 
+                          default="/workspace/datasets/final_results/2D-3D-MLP-Fusion/2024-10-17-20-12_BioVista-2D-Orthophotos_resnet18_240px_30m_circles-2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7/2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7_train_val_encodings")
     argparse.add_argument("--shape_size_meters", type=int, help="Shape size in meters.", default=30)
-    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=2)
+    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=1)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=8192)
     argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
     argparse.add_argument("--dataset_split", type=str, help="Dataset split to use for inference.", default="train")
@@ -71,7 +74,7 @@ if __name__ == "__main__":
         print(f"Reading image paths from {source}...")
         df = pd.read_csv(source)
         dataset_split = args.dataset_split
-        assert dataset_split in ["train", "test"], "dataset_split must be one of ['train', 'test']"
+        assert dataset_split in ["train", "val", "test"], "dataset_split must be one of ['train', 'test']"
         assert "dataset_split" in df.columns, "The csv file must contain a column 'dataset_split'."
 
         # Get rows with dataset_split == "test"
@@ -103,9 +106,8 @@ if __name__ == "__main__":
     save_dir = args.save_dir
     if save_dir is None:
         save_dir = os.path.join(os.path.dirname(os.path.dirname(model_weights)), "pointvector_encodings")
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     cfg.model.in_channels = cfg.model.encoder_args.in_channels
     print(f"Loaded model weights from epoch {epoch} with best validation accuracy {best_val}")
