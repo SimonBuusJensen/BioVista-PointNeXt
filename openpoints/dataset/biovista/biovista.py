@@ -31,7 +31,7 @@ class BioVista(Dataset):
         self.radius = int(self.shape_size / 2)
 
         self.data_root = os.path.dirname(csv_file)
-        self.point_cloud_root = os.path.join(self.data_root, f"{self.shape_size}m_airborne_lidar_scanner")
+        self.point_cloud_root = os.path.join(self.data_root, f"ALS_point_clouds")
         assert os.path.exists(self.point_cloud_root), f"Point cloud root {self.point_cloud_root} does not exist"
         assert len(os.listdir(self.point_cloud_root)) > 0, f"Point cloud root {self.point_cloud_root} is empty"
 
@@ -66,12 +66,11 @@ class BioVista(Dataset):
         return len(self.df)
 
     def file_name_from_row(self, row):
-        id = row["id"]
+        id = row["sample_id"]
         ogc_fid = row["ogc_fid"]
         year = row["year"]
         class_name = row["class_name"].replace(" ", "_").lower()
-        fn = f"id_{id}_ogc_fid_{ogc_fid}_{class_name}_year_{year}_30m.laz"
-        # fn = f"id_{id}_ogc_fid_{ogc_fid}_{class_name}_point_frac_1_30m.laz"
+        fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.laz"
 
         return fn
     
@@ -145,10 +144,11 @@ class BioVista(Dataset):
             # intensity_tensor = torch.from_numpy(xyzi[:,3][:, np.newaxis])
             
             # Concatenate x, y, z, intensity and laz class id to the data['x']
-            data['x'] = torch.cat((data['pos'], point_heights_tensor), dim=1)
+            # data['x'] = torch.cat((data['pos'], point_heights_tensor), dim=1)
+            data['x'] = data['pos']
 
             # Assert the data['x'] has the correct shape N x C=5
-            assert data['x'].shape[1] == 4, f"Data['x'] has shape {data['x'].shape} instead of N x C=4"
+            assert data['x'].shape[1] == 3, f"Data['x'] has shape {data['x'].shape} instead of N x C=4"
 
             return fn, data
         except Exception as e:

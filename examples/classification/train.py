@@ -80,6 +80,17 @@ def main(gpu, cfg, profile=False):
     scheduler = build_scheduler_from_cfg(cfg, optimizer)
 
     # build dataset
+    train_loader = build_dataloader_from_cfg(cfg.batch_size,
+                                             cfg.dataset,
+                                             cfg.dataloader,
+                                             datatransforms_cfg=cfg.datatransforms,
+                                             split='train',
+                                             distributed=cfg.distributed,
+                                             )
+    # DEBUG: Sample 5000 random samples. Change the train_loader.dataset.df to a subset of the original dataset
+    train_loader.dataset.df = train_loader.dataset.df.sample(5000)
+
+    logging.info(f"length of training dataset: {len(train_loader.dataset)}")
     val_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
                                            cfg.dataset,
                                            cfg.dataloader,
@@ -87,18 +98,20 @@ def main(gpu, cfg, profile=False):
                                            split=cfg.dataset.val.split,
                                            distributed=cfg.distributed
                                            )
+    # DEBUG: Sample 500 random samples. Change the val_loader.dataset.df to a subset of the original dataset
+    val_loader.dataset.df = val_loader.dataset.df.sample(500)
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
-    # test_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
-    #                                         cfg.dataset,
-    #                                         cfg.dataloader,
-    #                                         datatransforms_cfg=cfg.datatransforms,
-    #                                         split=cfg.dataset.test.split,
-    #                                         distributed=cfg.distributed
-    #                                         )
-    num_classes = val_loader.dataset.num_classes if hasattr(
-        val_loader.dataset, 'num_classes') else None
-    num_points = val_loader.dataset.num_points if hasattr(
-        val_loader.dataset, 'num_points') else None
+    test_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
+                                            cfg.dataset,
+                                            cfg.dataloader,
+                                            datatransforms_cfg=cfg.datatransforms,
+                                            split=cfg.dataset.test.split,
+                                            distributed=cfg.distributed
+                                            )
+    
+    
+    num_classes = val_loader.dataset.num_classes if hasattr(val_loader.dataset, 'num_classes') else None
+    num_points = val_loader.dataset.num_points if hasattr(val_loader.dataset, 'num_points') else None
     if num_classes is not None:
         assert cfg.num_classes == num_classes
 
@@ -118,16 +131,16 @@ def main(gpu, cfg, profile=False):
             macc, oa, accs, cm = validate_fn(model, val_loader, cfg)
             print_cls_results(oa, macc, accs, cfg.start_epoch, cfg)
         else:
-            # if cfg.mode == 'test':
-            #     # test mode
-            #     epoch, best_val = load_checkpoint(
-            #         model, pretrained_path=cfg.pretrained_path)
-            #     macc, oa, accs, cm = validate_fn(model, test_loader, cfg)
-            #     print_cls_results(oa, macc, accs, epoch, cfg)
-            #     return True
+            if cfg.mode == 'test':
+                # test mode
+                epoch, best_val_oa = load_checkpoint(
+                    model, pretrained_path=cfg.pretrained_path)
+                macc, oa, accs, cm = validate_fn(model, test_loader, cfg)
+                print_cls_results(oa, macc, accs, epoch, cfg)
+                return True
             if cfg.mode == 'val':
                 # validation mode
-                epoch, best_val = load_checkpoint(model, cfg.pretrained_path)
+                epoch, best_val_oa = load_checkpoint(model, cfg.pretrained_path)
                 macc, oa, accs, cm = validate_fn(model, val_loader, cfg)
                 print_cls_results(oa, macc, accs, epoch, cfg)
                 return True
@@ -146,18 +159,9 @@ def main(gpu, cfg, profile=False):
     else:
         logging.info('Training from scratch')
 
-    train_loader = build_dataloader_from_cfg(cfg.batch_size,
-                                             cfg.dataset,
-                                             cfg.dataloader,
-                                             datatransforms_cfg=cfg.datatransforms,
-                                             split='train',
-                                             distributed=cfg.distributed,
-                                             )
-
-    logging.info(f"length of training dataset: {len(train_loader.dataset)}")
 
     # ===> start training
-    val_macc, val_oa, val_accs, best_val, macc_when_best, best_epoch = 0., 0., [], 0., 0., 0
+    val_macc, val_oa, best_val_oa, best_epoch = 0., 0., 0., 0
     model.zero_grad()
 
     for epoch in range(cfg.start_epoch, cfg.epochs + 1):
@@ -230,19 +234,18 @@ def main(gpu, cfg, profile=False):
 
                 tp, count = val_cm.tp, val_cm.count
                 val_macc, val_oa, _ = val_cm.cal_acc(tp, count)
-                save_checkpoint(cfg, model, epoch, optimizer, scheduler, additioanl_dict={'val_macc': val_macc})
 
-                is_best = val_macc > best_val
+                is_best = val_oa > best_val_oa
                 if is_best:
-                    best_val = val_macc
-                    oa_when_best = val_oa
+                    best_val_oa = val_oa
                     best_epoch = epoch
                     logging.info(f'Found new best ckpt at epoch: @E{epoch}')
+                    save_checkpoint(cfg, model, epoch, optimizer, scheduler, additioanl_dict={'val_oacc': val_oa}, post_fix="ckpt_best")
 
                     # Write the results to a csv file in cfg.run_dir
                     # Write the image_paths, predictions and labels to a csv file
                     pred_label_fp = os.path.join(
-                        cfg.run_dir, f"epoch_{epoch}_acc_{best_val}_pred_labels.csv")
+                        cfg.run_dir, f"epoch_{epoch}_oacc_{best_val_oa}_pred_labels.csv")
                     with open(pred_label_fp, "w") as f:
                         f.write("image_path,prediction,label,correct,confidence\n")
                         for img_path, pred, label, conf in zip(img_path_list, pred_list, label_list, conf_list):
@@ -258,13 +261,13 @@ def main(gpu, cfg, profile=False):
                         high_acc = (high_correct / high_total) * 100 if high_total > 0 else 0
                         f.write(f"High bio correct,{high_correct},{high_total},{high_acc}\n")
                         f.write(f"Overall validation accuracy,{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{val_oa}\n")
-                        f.write(f"Mean validation accuracy,,,{best_val}")
+                        f.write(f"Mean validation accuracy,,,{best_val_oa}")
                     f.close()
 
                 if cfg.wandb.use_wandb:
                     wandb.log({
-                        "best_val_macc": best_val,
-                        "oa_when_best": oa_when_best,
+                        "best_val_oacc": best_val_oa,
+                        "macc_when_best": val_macc,
                         "epoch": epoch
                     })
 
@@ -294,16 +297,15 @@ def main(gpu, cfg, profile=False):
             scheduler.step(epoch)
 
     # test the best validataion model
-    # best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(
-    #     cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
-    # test_macc, test_oa, test_accs, test_cm = validate(model, test_loader, cfg)
-    # print_cls_results(test_oa, test_macc, test_accs, best_epoch, cfg)
-    # if cfg.wandb.use_wandb:
-    #     wandb.log({
-    #         "test_oa": test_oa,
-    #         "test_macc": test_macc,
-    #         "epoch": epoch
-    #     })
+    best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
+    test_macc, test_oa, test_accs, test_cm = validate(model, test_loader, cfg)
+    print_cls_results(test_oa, test_macc, test_accs, best_epoch, cfg)
+    if cfg.wandb.use_wandb:
+        wandb.log({
+            "test_oa": test_oa,
+            "test_macc": test_macc,
+            "epoch": epoch
+        })
 
    
 

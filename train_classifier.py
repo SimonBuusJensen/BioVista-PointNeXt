@@ -13,15 +13,16 @@ from openpoints.utils import EasyConfig, dist_utils, find_free_port, generate_ex
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
-    parser.add_argument('--dataset_csv', type=str, help='dataset csv file', default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/high_and_low_HNV-forest-proxy-train-val-polygon-dataset_30_m_circles_dataset_without_empty_clouds.csv")
+    parser.add_argument('--dataset_csv', type=str, help='dataset csv file', 
+                        default="/workspace/datasets/samples.csv")
     parser.add_argument('--profile', action='store_true', default=False, help='set to True to profile speed')
-    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=8192)
+    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=4096)
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
-    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=10)
+    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=1)
     parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=2)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--wandb", type=bool, help="Whether to log to weights and biases", default=True)
-    parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-3D-ALS")
+    parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Hyperparameter-Search")
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()

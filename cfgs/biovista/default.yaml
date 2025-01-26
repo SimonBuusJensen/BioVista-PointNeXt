@@ -37,9 +37,9 @@ datatransforms:
 # ---------------------------------------------------------------------------- #
 val_fn: validate
 ignore_index: null 
-epochs: 10
+epochs: 20
 
-cls_weighed_loss: False
+cls_weighed_loss: True
 
 criterion_args:
   NAME: CrossEntropy
