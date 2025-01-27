@@ -79,7 +79,7 @@ def main(gpu, cfg):
                                              split='train'
                                              )
     # DEBUG: Sample 5000 random samples. Change the train_loader.dataset.df to a subset of the original dataset
-    train_loader.dataset.df = train_loader.dataset.df.sample(5000) # TODO: Remove this line
+    # train_loader.dataset.df = train_loader.dataset.df.sample(5000) # TODO: Remove this line
 
     logging.info(f"length of training dataset: {len(train_loader.dataset)}")
     cfg.dataset.val.num_points = cfg.num_points
@@ -90,7 +90,7 @@ def main(gpu, cfg):
                                            split=cfg.dataset.val.split
                                            )
     # DEBUG: Sample 500 random samples. Change the val_loader.dataset.df to a subset of the original dataset
-    val_loader.dataset.df = val_loader.dataset.df.sample(500) # TODO: Remove this line
+    # val_loader.dataset.df = val_loader.dataset.df.sample(500) # TODO: Remove this line
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")  
     cfg.dataset.test.num_points = cfg.num_points
     test_loader = build_dataloader_from_cfg(cfg.batch_size,
@@ -101,7 +101,7 @@ def main(gpu, cfg):
                                             )
     
     # DEBUG: Sample 500 random samples. Change the test_loader.dataset.df to a subset of the original dataset
-    test_loader.dataset.df = test_loader.dataset.df.sample(500) # TODO: Remove this line
+    # test_loader.dataset.df = test_loader.dataset.df.sample(500) # TODO: Remove this line
     logging.info(f"length of testing dataset: {len(test_loader.dataset)}")
 
     # Setup model
