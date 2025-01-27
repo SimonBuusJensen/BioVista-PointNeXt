@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_csv', type=str, help='dataset csv file', 
                         # default="/workspace/datasets/samples.csv") 
                         default="/workspace/datasets/samples.csv")
-    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=1)
+    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=20)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=4096)
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
     parser.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=True)
-    parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=True)
+    parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=False)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
     parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
