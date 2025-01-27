@@ -88,7 +88,7 @@ def main(gpu, cfg, profile=False):
                                              distributed=cfg.distributed,
                                              )
     # DEBUG: Sample 5000 random samples. Change the train_loader.dataset.df to a subset of the original dataset
-    train_loader.dataset.df = train_loader.dataset.df.sample(5000)
+    train_loader.dataset.df = train_loader.dataset.df.sample(5000) # TODO: Remove this line
 
     logging.info(f"length of training dataset: {len(train_loader.dataset)}")
     val_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
@@ -99,7 +99,7 @@ def main(gpu, cfg, profile=False):
                                            distributed=cfg.distributed
                                            )
     # DEBUG: Sample 500 random samples. Change the val_loader.dataset.df to a subset of the original dataset
-    val_loader.dataset.df = val_loader.dataset.df.sample(500)
+    val_loader.dataset.df = val_loader.dataset.df.sample(500) # TODO: Remove this line
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
     test_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
                                             cfg.dataset,
@@ -108,19 +108,19 @@ def main(gpu, cfg, profile=False):
                                             split=cfg.dataset.test.split,
                                             distributed=cfg.distributed
                                             )
-    
+    # DEBUG: Sample 500 random samples. Change the test_loader.dataset.df to a subset of the original dataset
+    test_loader.dataset.df = test_loader.dataset.df.sample(500) # TODO: Remove this line
+    logging.info(f"length of testing dataset: {len(test_loader.dataset)}")
     
     num_classes = val_loader.dataset.num_classes if hasattr(val_loader.dataset, 'num_classes') else None
     num_points = val_loader.dataset.num_points if hasattr(val_loader.dataset, 'num_points') else None
     if num_classes is not None:
         assert cfg.num_classes == num_classes
 
-    
     logging.info(f"number of classes of the dataset: {num_classes}, "
-                 f"number of points sampled from dataset: {num_points}, "
                  f"number of points as model input: {cfg.num_points}")
-    cfg.classes = cfg.get('classes', None) or val_loader.dataset.classes if hasattr(
-        val_loader.dataset, 'classes') else None or np.range(num_classes)
+    
+    cfg.classes = cfg.get('classes', None) or val_loader.dataset.classes if hasattr(val_loader.dataset, 'classes') else None or np.range(num_classes)
     validate_fn = eval(cfg.get('val_fn', 'validate'))
 
     # optionally resume from a checkpoint
@@ -159,8 +159,9 @@ def main(gpu, cfg, profile=False):
     else:
         logging.info('Training from scratch')
 
-
-    # ===> start training
+    """
+    TRAINING
+    """
     val_macc, val_oa, best_val_oa, best_epoch = 0., 0., 0., 0
     model.zero_grad()
 
@@ -242,10 +243,9 @@ def main(gpu, cfg, profile=False):
                     logging.info(f'Found new best ckpt at epoch: @E{epoch}')
                     save_checkpoint(cfg, model, epoch, optimizer, scheduler, additioanl_dict={'val_oacc': val_oa}, post_fix="ckpt_best")
 
-                    # Write the results to a csv file in cfg.run_dir
+                    # Write the results to a csv file
                     # Write the image_paths, predictions and labels to a csv file
-                    pred_label_fp = os.path.join(
-                        cfg.run_dir, f"epoch_{epoch}_oacc_{best_val_oa}_pred_labels.csv")
+                    pred_label_fp = os.path.join(cfg.run_dir, f"epoch_{epoch}_oacc_{round(best_val_oa, 2)}_val_pred_labels.csv")
                     with open(pred_label_fp, "w") as f:
                         f.write("image_path,prediction,label,correct,confidence\n")
                         for img_path, pred, label, conf in zip(img_path_list, pred_list, label_list, conf_list):
@@ -283,7 +283,6 @@ def main(gpu, cfg, profile=False):
                             "epoch": epoch
                         })
 
-
         if cfg.wandb.use_wandb:
             wandb.log({
                 "val_acc": val_macc,
@@ -296,19 +295,76 @@ def main(gpu, cfg, profile=False):
         if cfg.sched_on_epoch:
             scheduler.step(epoch)
 
-    # test the best validataion model
+    """
+    TESTING
+    """
     best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
-    test_macc, test_oa, test_accs, test_cm = validate(model, test_loader, cfg)
+    
+    model.eval()
+    torch.backends.cudnn.enabled = True
+    with torch.set_grad_enabled(False):
+
+        pred_list = []
+        conf_list = []
+        label_list = []
+        img_path_list = []
+        test_cm = ConfusionMatrix(num_classes=cfg.num_classes)
+
+        pbar = tqdm(enumerate(test_loader), total=test_loader.__len__())
+        for idx, (fns, data) in pbar:
+            
+            for key in data.keys():
+                data[key] = data[key].cuda(non_blocking=True)
+            target = data['y']
+            points = data['x']
+            points = points[:, :num_points]
+            data['pos'] = points[:, :, :3].contiguous()
+            data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
+            logits = model(data)
+            test_cm.update(logits.argmax(dim=1), target)
+
+            # Save the predictions and labels
+            pred_list.extend(logits.argmax(dim=1).cpu().numpy())
+
+            confidences = torch.nn.functional.softmax(logits, dim=1)
+            confidences = torch.max(confidences, 1)[0]
+
+            conf_list.extend(confidences.cpu().numpy())
+            label_list.extend(target.cpu().numpy())
+            img_path_list.extend(fns)
+
+        tp, count = test_cm.tp, test_cm.count
+        test_macc, test_oa, test_accs = test_cm.cal_acc(tp, count)
+        pred_label_fp = os.path.join(cfg.run_dir, f"test_pred_labels.csv")
+        with open(pred_label_fp, "w") as f:
+            f.write("image_path,prediction,label,correct,confidence\n")
+            for img_path, pred, label, conf in zip(img_path_list, pred_list, label_list, conf_list):
+                f.write(
+                    f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
+            # Write overall high, low and total accuracy
+            low_total = test_cm.actual[0].item()
+            low_correct = test_cm.tp[0].item() 
+            low_acc = (low_correct / low_total) * 100 if low_total > 0 else 0
+            f.write(f"Low bio correct,{low_correct},{low_total},{low_acc}\n")
+            high_total = test_cm.actual[1].item()
+            high_correct = test_cm.tp[1].item()
+            high_acc = (high_correct / high_total) * 100 if high_total > 0 else 0
+            f.write(f"High bio correct,{high_correct},{high_total},{high_acc}\n")
+            f.write(f"Overall test accuracy,{test_cm.tp.sum().item()},{test_cm.actual.sum().item()},{test_oa}\n")
+            f.write(f"Mean test accuracy,{test_macc}\n")
+        f.close()
+
     print_cls_results(test_oa, test_macc, test_accs, best_epoch, cfg)
     if cfg.wandb.use_wandb:
         wandb.log({
             "test_oa": test_oa,
             "test_macc": test_macc,
+            "test_accuracy_high": high_acc,
+            "test_accuracy_low": low_acc,
             "epoch": epoch
         })
 
    
-
 def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
     loss_meter = AverageMeter()
     cm = ConfusionMatrix(num_classes=cfg.num_classes)

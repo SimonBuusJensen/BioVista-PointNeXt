@@ -4,10 +4,19 @@ import yaml
 import wandb
 import numpy as np
 from datetime import datetime
-from torch import multiprocessing as mp
 from examples.classification.train import main as train
 from examples.classification.pretrain import main as pretrain
-from openpoints.utils import EasyConfig, dist_utils, find_free_port, generate_exp_directory, resume_exp_directory, Wandb
+from openpoints.utils import EasyConfig, dist_utils, generate_exp_directory, resume_exp_directory
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
 if __name__ == "__main__":
@@ -19,10 +28,12 @@ if __name__ == "__main__":
     parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=4096)
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=1)
-    parser.add_argument("--batch_size_train", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
-    parser.add_argument("--wandb", type=bool, help="Whether to log to weights and biases", default=True)
+    parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Hyperparameter-Search")
+    parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=False)
+    parser.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyz")
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
@@ -44,12 +55,15 @@ if __name__ == "__main__":
     if args.qb_radius is not None:
         cfg.model.encoder_args.radius = args.qb_radius
 
-    if args.batch_size_train is not None:
-        cfg.batch_size = args.batch_size_train
+    if args.batch_size is not None:
+        cfg.batch_size = args.batch_size
         cfg.val_batch_size = cfg.batch_size
 
     if args.lr is not None:
         cfg.lr = args.lr
+    
+    if args.with_class_weights is not None:
+        cfg.cls_weighed_loss = args.with_class_weights
 
     # Set the dataset csv file
     cfg.dataset.common.data_root = args.dataset_csv

@@ -14,6 +14,7 @@ dataset:
 num_points: 8192
 feature_keys: pos
 num_classes: 2
+
 batch_size: 2
 val_batch_size: 2
 
@@ -21,7 +22,8 @@ dataloader:
   num_workers: 4
 
 datatransforms:
-  train: [PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
+  # train: [PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
+  train: [PointsToTensor, PointCloudXYZAlign]
   val: [PointsToTensor, PointCloudXYZAlign]
   vote: []
   kwargs:
