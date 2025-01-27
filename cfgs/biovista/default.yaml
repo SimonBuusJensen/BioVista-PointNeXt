@@ -5,7 +5,6 @@ dataset:
     data_root: /workspace/datasets/test_3D_point_cloud_pipeline/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset.csv
   train:
     split: train
-    num_points: 8192
   val:
     split: val
   test:
@@ -46,7 +45,7 @@ cls_weighed_loss: True
 criterion_args:
   NAME: CrossEntropy
   label_smoothing: 0.2
-
+  
 optimizer:
  NAME: 'adamw'  # performs 1 point better than adam
  weight_decay: 1.0e-4
@@ -63,7 +62,7 @@ use_voting: False
 # ---------------------------------------------------------------------------- #
 # io and misc
 # ---------------------------------------------------------------------------- #
-save_freq: 1 # save epoch every xxx epochs, -1 only save last and best. 
+save_freq: -1 # save epoch every xxx epochs, -1 only save last and best. 
 val_freq: 1
 
 wandb:

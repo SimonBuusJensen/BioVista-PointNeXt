@@ -18,14 +18,18 @@ class BioVista(Dataset):
                  data_root='/workspace/dataset',
                  split='train',
                  num_points=8192,
-                 transform=None
+                 channels="xyzi",
+                 transform=None,
                  ):
         
         # Assert the data_root is a csv file
         assert data_root.endswith('.csv')
         csv_file = data_root
         self.df = pd.read_csv(csv_file)
+        
         self.num_points = num_points
+        self.channels = channels
+        self.n_channels = len(channels)
 
         self.shape_size = 30
         self.radius = int(self.shape_size / 2)
@@ -43,13 +47,6 @@ class BioVista(Dataset):
         # Shuffle the dataframe
         if split == 'train':
             self.df = self.df.sample(frac=1).reset_index(drop=True)
-
-        # Select randomly a subset of the dataframe 2000 train and 1000 val
-        # if split == 'train':
-        #     self.df = self.df.sample(2000)
-        # else:
-        #     self.df = self.df.sample(1000)
-        # print("WARNING: Using a subset of the dataset")
 
         self.transform = transform
     
@@ -136,19 +133,21 @@ class BioVista(Dataset):
             if self.transform is not None:
                 data = self.transform(data)
 
-            # Append the gravity dimension to the data (height of the point cloud)
-            point_heights = xyzi[:, self.gravity_dim:self.gravity_dim+1] - xyzi[:, self.gravity_dim:self.gravity_dim+1].min()
-            point_heights_tensor = torch.from_numpy(point_heights) # 8192 x 1
-
-            # Expand the dimension of the intensity from 8192 (1D) to 8192 x 1 (2D) and convert to tensor
-            # intensity_tensor = torch.from_numpy(xyzi[:,3][:, np.newaxis])
-            
-            # Concatenate x, y, z, intensity and laz class id to the data['x']
-            # data['x'] = torch.cat((data['pos'], point_heights_tensor), dim=1)
             data['x'] = data['pos']
+            
+            # Append the gravity dimension to the data (height of the point cloud)
+            if "h" in self.channels:
+                point_heights = xyzi[:, self.gravity_dim:self.gravity_dim+1] - xyzi[:, self.gravity_dim:self.gravity_dim+1].min()
+                point_heights_tensor = torch.from_numpy(point_heights) # 8192 x 1
+                data['x'] = torch.cat((data['x'], point_heights_tensor), dim=1)
+            
+            # Append the intensity dimension to the data
+            if "i" in self.channels:
+                intensity_tensor = torch.from_numpy(xyzi[:,3][:, np.newaxis])
+                data['x'] = torch.cat((data['x'], intensity_tensor), dim=1)
 
             # Assert the data['x'] has the correct shape N x C=5
-            assert data['x'].shape[1] == 3, f"Data['x'] has shape {data['x'].shape} instead of N x C=4"
+            assert data['x'].shape[1] == self.n_channels, f"Data['x'] has shape {data['x'].shape} instead of N x C={self.n_channels}"
 
             return fn, data
         except Exception as e:

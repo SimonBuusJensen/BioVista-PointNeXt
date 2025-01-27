@@ -1,5 +1,6 @@
 import os, logging, csv, numpy as np, wandb
 from tqdm import tqdm
+from collections import Counter
 import torch, torch.nn as nn
 from torch import distributed as dist
 from torch.utils.tensorboard import SummaryWriter
@@ -10,7 +11,7 @@ from openpoints.dataset import build_dataloader_from_cfg
 from openpoints.transforms import build_transforms_from_cfg
 from openpoints.optim import build_optimizer_from_cfg
 from openpoints.scheduler import build_scheduler_from_cfg
-# from openpoints.loss import build_criterion_from_cfg
+from openpoints.loss import build_criterion_from_cfg
 from openpoints.models import build_model_from_cfg
 from openpoints.models.layers import furthest_point_sample, fps
 
@@ -45,75 +46,90 @@ def print_cls_results(oa, macc, accs, epoch, cfg):
         s += '{:10}: {:3.2f}%\n'.format(name, acc_tmp)
     s += f'E@{epoch}\tOA: {oa:3.2f}\tmAcc: {macc:3.2f}\n'
     logging.info(s)
-
-
-def main(gpu, cfg, profile=False):
     
-    # logger
-    setup_logger_dist(cfg.log_path, cfg.rank, name=cfg.dataset.common.NAME)
+def calculate_class_weights(labels):
+    # Count the occurrence of each class
+    class_counts = Counter(labels)
+    total_count = sum(class_counts.values())
+    
+    # Inverse of frequency
+    class_weights = {cls: total_count / count for cls, count in class_counts.items()}
+    
+    # Convert to a tensor
+    class_weights_tensor = torch.tensor([class_weights[i] for i in sorted(class_weights.keys())], dtype=torch.float)
+    return class_weights_tensor
 
-    set_random_seed(cfg.seed + cfg.rank, deterministic=cfg.deterministic)
+
+def main(gpu, cfg):
+    
+    # Setup logger
+    setup_logger_dist(cfg.log_path, cfg.rank, name=cfg.dataset.common.NAME)
+    
+    # Setup seed and device
+    set_random_seed(cfg.seed, deterministic=cfg.deterministic)
     torch.backends.cudnn.enabled = True
     logging.info(cfg)
+    
+    # build dataset
+    cfg.dataset.train.num_points = cfg.num_points
+    train_loader = build_dataloader_from_cfg(cfg.batch_size,
+                                             cfg.dataset,
+                                             cfg.dataloader,
+                                             datatransforms_cfg=cfg.datatransforms,
+                                             split='train'
+                                             )
+    # DEBUG: Sample 5000 random samples. Change the train_loader.dataset.df to a subset of the original dataset
+    train_loader.dataset.df = train_loader.dataset.df.sample(5000) # TODO: Remove this line
 
+    logging.info(f"length of training dataset: {len(train_loader.dataset)}")
+    cfg.dataset.val.num_points = cfg.num_points
+    val_loader = build_dataloader_from_cfg(cfg.batch_size,
+                                           cfg.dataset,
+                                           cfg.dataloader,
+                                           datatransforms_cfg=cfg.datatransforms,
+                                           split=cfg.dataset.val.split
+                                           )
+    # DEBUG: Sample 500 random samples. Change the val_loader.dataset.df to a subset of the original dataset
+    val_loader.dataset.df = val_loader.dataset.df.sample(500) # TODO: Remove this line
+    logging.info(f"length of validation dataset: {len(val_loader.dataset)}")  
+    cfg.dataset.test.num_points = cfg.num_points
+    test_loader = build_dataloader_from_cfg(cfg.batch_size,
+                                            cfg.dataset,
+                                            cfg.dataloader,
+                                            datatransforms_cfg=cfg.datatransforms,
+                                            split=cfg.dataset.test.split
+                                            )
+    
+    # DEBUG: Sample 500 random samples. Change the test_loader.dataset.df to a subset of the original dataset
+    test_loader.dataset.df = test_loader.dataset.df.sample(500) # TODO: Remove this line
+    logging.info(f"length of testing dataset: {len(test_loader.dataset)}")
+
+    # Setup model
     if not cfg.model.get('criterion_args', False):
         cfg.model.criterion_args = cfg.criterion_args
+        
+    if cfg.cls_weighed_loss:
+        cfg.model.criterion_args.weight = calculate_class_weights(train_loader.dataset.df['class_id'].values)
+        logging.info('Using class weighted loss')
+        logging.info(f"Weight: {cfg.model.criterion_args.weight}")
+        
     model = build_model_from_cfg(cfg.model).to(cfg.rank)
     model_size = cal_model_parm_nums(model)
     logging.info(model)
     logging.info('Number of params: %.4f M' % (model_size / 1e6))
-    # criterion = build_criterion_from_cfg(cfg.criterion_args).cuda()
+    
     if cfg.model.get('in_channels', None) is None:
         cfg.model.in_channels = cfg.model.encoder_args.in_channels
 
     if cfg.sync_bn:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         logging.info('Using Synchronized BatchNorm ...')
-    if cfg.distributed:
-        torch.cuda.set_device(gpu)
-        model = nn.parallel.DistributedDataParallel(
-            model.cuda(), device_ids=[cfg.rank], output_device=cfg.rank)
-        logging.info('Using Distributed Data parallel ...')
 
-    # optimizer & scheduler
+    # criterion, optimizer & scheduler
     optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
     scheduler = build_scheduler_from_cfg(cfg, optimizer)
 
-    # build dataset
-    train_loader = build_dataloader_from_cfg(cfg.batch_size,
-                                             cfg.dataset,
-                                             cfg.dataloader,
-                                             datatransforms_cfg=cfg.datatransforms,
-                                             split='train',
-                                             distributed=cfg.distributed,
-                                             )
-    # DEBUG: Sample 5000 random samples. Change the train_loader.dataset.df to a subset of the original dataset
-    train_loader.dataset.df = train_loader.dataset.df.sample(5000) # TODO: Remove this line
-
-    logging.info(f"length of training dataset: {len(train_loader.dataset)}")
-    val_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
-                                           cfg.dataset,
-                                           cfg.dataloader,
-                                           datatransforms_cfg=cfg.datatransforms,
-                                           split=cfg.dataset.val.split,
-                                           distributed=cfg.distributed
-                                           )
-    # DEBUG: Sample 500 random samples. Change the val_loader.dataset.df to a subset of the original dataset
-    val_loader.dataset.df = val_loader.dataset.df.sample(500) # TODO: Remove this line
-    logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
-    test_loader = build_dataloader_from_cfg(cfg.get('val_batch_size', cfg.batch_size),
-                                            cfg.dataset,
-                                            cfg.dataloader,
-                                            datatransforms_cfg=cfg.datatransforms,
-                                            split=cfg.dataset.test.split,
-                                            distributed=cfg.distributed
-                                            )
-    # DEBUG: Sample 500 random samples. Change the test_loader.dataset.df to a subset of the original dataset
-    test_loader.dataset.df = test_loader.dataset.df.sample(500) # TODO: Remove this line
-    logging.info(f"length of testing dataset: {len(test_loader.dataset)}")
-    
     num_classes = val_loader.dataset.num_classes if hasattr(val_loader.dataset, 'num_classes') else None
-    num_points = val_loader.dataset.num_points if hasattr(val_loader.dataset, 'num_points') else None
     if num_classes is not None:
         assert cfg.num_classes == num_classes
 
@@ -206,14 +222,13 @@ def main(gpu, cfg, profile=False):
 
                 # Set no grad for validation
                 val_cm = ConfusionMatrix(num_classes=cfg.num_classes)
-                npoints = cfg.num_points
                 pbar = tqdm(enumerate(val_loader), total=val_loader.__len__())
                 for idx, (fn, data) in pbar:
                     for key in data.keys():
                         data[key] = data[key].cuda(non_blocking=True)
                     target = data['y']
                     points = data['x']
-                    points = points[:, :npoints]
+                    points = points[:, :cfg.num_points]
                     data['pos'] = points[:, :, :3].contiguous()
                     data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
 
@@ -317,7 +332,7 @@ def main(gpu, cfg, profile=False):
                 data[key] = data[key].cuda(non_blocking=True)
             target = data['y']
             points = data['x']
-            points = points[:, :num_points]
+            points = points[:, :cfg.num_points]
             data['pos'] = points[:, :, :3].contiguous()
             data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
             logits = model(data)
@@ -368,42 +383,19 @@ def main(gpu, cfg, profile=False):
 def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
     loss_meter = AverageMeter()
     cm = ConfusionMatrix(num_classes=cfg.num_classes)
-    npoints = cfg.num_points
 
     model.train()  # set model to training mode
     pbar = tqdm(enumerate(train_loader), total=train_loader.__len__(), desc=f"Train Epoch [{epoch}/{cfg.epochs}]")
     num_iter = 0
     for idx, (fn, data) in pbar:
+        
         for key in data.keys():
             data[key] = data[key].cuda(non_blocking=True)
+        
         num_iter += 1
         points = data['x']
         target = data['y']
-        """ bebug
-        from openpoints.dataset import vis_points
-        vis_points(data['pos'].cpu().numpy()[0])
-        """
-        # num_curr_pts = points.shape[1]
-        # if num_curr_pts > npoints:  # point resampling strategy
-        #     if npoints == 1024:
-        #         point_all = 1200
-        #     elif npoints == 4096:
-        #         point_all = 4800
-        #     elif npoints == 8192:
-        #         point_all = 8192
-        #     elif npoints == 16384:
-        #         point_all = 16384
-        #     else:
-        #         raise NotImplementedError()
-        #     if  points.size(1) < point_all:
-        #         point_all = points.size(1)
-        #     fps_idx = furthest_point_sample(
-        #         points[:, :, :3].contiguous(), point_all)
-        #     fps_idx = fps_idx[:, np.random.choice(
-        #         point_all, npoints, False)]
-        #     points = torch.gather(
-        #         points, 1, fps_idx.unsqueeze(-1).long().expand(-1, -1, points.shape[-1]))
-
+    
         data['pos'] = points[:, :, :3].contiguous()
         data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
         logits, loss = model.get_logits_loss(data, target) if not hasattr(model, 'module') else model.module.get_logits_loss(data, target)
@@ -423,10 +415,7 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
         # update confusion matrix
         cm.update(logits.argmax(dim=1), target)
         loss_meter.update(loss.item())
-        # if idx % cfg.print_freq == 0:
-        #     macc, overallacc, accs = cm.all_acc()
-            # pbar.set_description(f"Train Epoch [{epoch}/{cfg.epochs}] "
-            #                      f"Loss {loss_meter.val:.3f} Acc {cm:.2f}")
+
     macc, overallacc, accs = cm.all_acc()
     return loss_meter.avg, macc, overallacc, accs, cm
 
@@ -436,7 +425,6 @@ def validate(model, val_loader, cfg):
     model.eval()  # set model to eval mode
     cm = ConfusionMatrix(num_classes=cfg.num_classes)
     loss_meter = AverageMeter()
-    npoints = cfg.num_points
     pbar = tqdm(enumerate(val_loader), total=val_loader.__len__())
 
     for idx, (fn, data) in pbar:
@@ -444,7 +432,7 @@ def validate(model, val_loader, cfg):
             data[key] = data[key].cuda(non_blocking=True)
         target = data['y']
         points = data['x']
-        points = points[:, :npoints]
+        points = points[:, :cfg.num_points]
         data['pos'] = points[:, :, :3].contiguous()
         data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
         logits, loss = model.get_logits_loss(data, target)

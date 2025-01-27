@@ -1,10 +1,7 @@
 
 
-python train_classifier.py --num_points 8192 --qb_radius 0.7 --batch_size 8 --lr 0.001 --cfg cfgs/biovista/pointvector-s.yaml
-python train_classifier.py --num_points 16384 --qb_radius 0.7 --batch_size 8 --lr 0.001 --cfg cfgs/biovista/pointvector-s.yaml
-
-python train_classifier.py --num_points 8192 --qb_radius 0.7 --batch_size 8 --lr 0.0001 --cfg cfgs/biovista/pointvector-s.yaml
-python train_classifier.py --num_points 16384 --qb_radius 0.7 --batch_size 8 --lr 0.0001 --cfg cfgs/biovista/pointvector-s.yaml
+python train_classifier.py --with_class_weights True --channels xyz  --num_points 8192 --qb_radius 0.7 --batch_size 8 --lr 0.0001 --project_name BioVista-Hyperparameter-Search
+python train_classifier.py --with_class_weights False --channels xyz  --num_points 8192 --qb_radius 0.7 --batch_size 8 --lr 0.0001 --project_name BioVista-Hyperparameter-Search
 
 
 # Batch size: 4, 8, 16,

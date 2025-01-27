@@ -46,7 +46,7 @@ def build_dataloader_from_cfg(batch_size,
                               dataloader_cfg=None,
                               datatransforms_cfg=None,
                               split='train',
-                              distributed=True,
+                              distributed=False,
                               dataset=None
                               ):
     if dataset is None:
