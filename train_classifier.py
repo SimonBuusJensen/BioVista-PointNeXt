@@ -26,7 +26,7 @@ if __name__ == "__main__":
                         default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument('--dataset_csv', type=str, help='dataset csv file', 
                         # default="/workspace/datasets/samples.csv") 
-                        default="/workspace/datasets/samples.csv")
+                        default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=20)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
