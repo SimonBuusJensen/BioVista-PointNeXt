@@ -26,7 +26,6 @@ datatransforms:
   val: [PointsToTensor, PointCloudXYZAlign]
   vote: []
   kwargs:
-    color_drop: 0.2
     gravity_dim: 2
     scale: [0.9, 1.1]
     angle: [0, 0, 1]

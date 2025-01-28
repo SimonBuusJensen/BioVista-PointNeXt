@@ -236,8 +236,14 @@ class BioVista(Dataset):
 
             # Select a random subset of points given the self.num_points
             if self.num_points is not None and points.shape[0] >= self.num_points:
+                print("---------------------------------")
+                print("Step 5: Select a random subset of points")
+                print(f"Number of points before random subset: {points.shape}")
                 idx = np.random.choice(points.shape[0], self.num_points, replace=False)
                 points = points[idx, :]
+                fn_after_random_subset = os.path.join(save_dir, "3_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_random_subset.ply"))
+                print("Number of points after random subset: ", points.shape)
+                self.points_2_ply(points, fn_after_random_subset, color_mode=color_mode)
 
             # Fill extra points into the points cloud if the number of points is less than the required number of points
             if self.num_points is not None and points.shape[0] < self.num_points:
@@ -282,19 +288,24 @@ class BioVista(Dataset):
 
 if __name__ == "__main__":
 
+    color_drop = 0.2
+    angle = [0, 0, 1]
+    jitter_sigma = 0.005
+    jitter_clip= 0.02
     transforms = Compose([
         PointsToTensor(),
-        PointCloudScaling(),
+        PointCloudScaling(scale=[0.9, 1.1]),
         PointCloudXYZAlign(),
         PointCloudRotation(),
-        PointCloudJitter()
+        PointCloudJitter(jitter_clip=jitter_clip, jitter_sigma=jitter_sigma)
     ])
 
     dataset = BioVista(
         data_root="/home/simon/data/BioVista/Forest-Biodiversity-Potential/samples.csv", 
         split='train', 
         transform=transforms,
-        format='npz'
+        format='npz',
+        num_points=8192
     )
     print(len(dataset))
     
