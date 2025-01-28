@@ -1,8 +1,10 @@
 from torch.utils.data import Dataset
+from pathlib import Path
 import os 
 import pandas as pd
 import numpy as np
 import laspy
+import matplotlib.pyplot as plt 
 import torch
 from torchvision.transforms import Compose
 from openpoints.transforms import PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter
@@ -19,7 +21,7 @@ class BioVista(Dataset):
                  num_points=8192,
                  channels="xyzi",
                  transform=None,
-                 format='npz'
+                 format='npz',
                  ):
         
         # Assert the data_root is a csv file
@@ -66,16 +68,15 @@ class BioVista(Dataset):
         point_cloud_array = point_cloud_array[mask]
         return point_cloud_array
 
-    def __len__(self):
-        return len(self.df)
-
     def file_name_from_row(self, row):
         id = row["sample_id"]
         ogc_fid = row["ogc_fid"]
         year = row["year"]
         class_name = row["class_name"].replace(" ", "_").lower()
-        fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.laz"
-
+        if self.format == 'npz':
+            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.npz"
+        else:
+            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.laz"
         return fn
     
     def load_point_cloud(self, fn):
@@ -92,63 +93,160 @@ class BioVista(Dataset):
             """
             data_npz = np.load(fn)
             points = data_npz['points'] # 
-            
-            # Keep only the x, y, z, intensity and class_id columns (channel 0, 1, 2, 6, 7)
-            points = points[:, [0, 1, 2, 6, 7]]
-
             return points
+        
         elif self.format == 'laz':
             laz_file = laspy.read(fn)
             x = np.array(laz_file.x).astype(np.float32)
             y = np.array(laz_file.y).astype(np.float32)
             z = np.array(laz_file.z).astype(np.float32)
-            intensity = laz_file.intensity
-            laz_class_ids = laz_file.classification
+            r = np.array(laz_file.red).astype(np.uint8)
+            g = np.array(laz_file.green).astype(np.uint8)
+            b = np.array(laz_file.blue).astype(np.uint8)
+            intensity = np.array(laz_file.intensity).astype(np.float32)
+            laz_class_ids = np.array(laz_file.classification).astype(np.uint8)
 
             # Basic data points, x, y, z, intensity and laz class id (not to be confused with the class id in the dataset)
-            points = [x, y, z, intensity, laz_class_ids]
+            points = [x, y, z, r, g, b, intensity, laz_class_ids]
 
             # Convert to N x C format e.g. 1000 X 5 where 5 is x, y, z, intensity and laz class id
             points = np.vstack(points).transpose()
             return points
+        else:
+            raise ValueError(f"Unknown format {self.format}")
+    
+    def getitem_by_class_id_year_ogc_fid_and_sample_id(self, class_id, year, ogc_fid, sample_id):
+        for i in range(len(self.df)):
+            row = self.df.iloc[i]
+            if row['class_id'] == class_id and row['year'] == year and row['ogc_fid'] == ogc_fid and row['sample_id'] == sample_id:
+                idx = i
+                break
+           
+        return self.__getitem__(idx)
+    
+    def create_colormap(self, num_colors=400):
+
+        # Create a colormap using matplotlib
+        cmap = plt.get_cmap('jet')
+
+        # Generate colors for each index
+        colors = [cmap(i / (num_colors - 1)) for i in range(num_colors)]
+
+        # Convert to 8-bit RGB format
+        colors_rgb = [(int(r * 255), int(g * 255), int(b * 255)) for r, g, b, _ in colors]
+
+        return colors_rgb
+    
+    def points_2_ply(self, points, fn, color_mode='rgb', n_colors=256):
+        # Save the points as a ply file (x, y, z, r, g, b)
+
+        num_points = points.shape[0]
+
+        # Create a directory for the file if it doesn't exist
+        Path(os.path.dirname(fn)).mkdir(parents=True, exist_ok=True)
+
+        if color_mode == 'intensity':
+            max_intensity = np.max(points[:, 6])
+            min_intensity = np.min(points[:, 6])
+            print(f"Max intensity: {max_intensity}, Min intensity: {min_intensity}")
+            # Normalize the intensity values to 0-n_colors
+            normalized_intensities = (points[:, 6] - min_intensity) / (max_intensity - min_intensity) * (n_colors - 1)
+            cmap = self.create_colormap(n_colors)
+        
+        if color_mode == 'height':
+            max_height = np.max(points[:, 2])
+            min_height = np.min(points[:, 2])
+            print(f"Max height: {max_height}, Min height: {min_height}")
+            # Normalize the height values to 0-n_colors
+            normalized_heights = (points[:, 2] - min_height) / (max_height - min_height) * (n_colors - 1)
+            cmap = self.create_colormap(n_colors)
+
+        with open(fn, 'w') as file:
+        # Writing the PLY header
+            file.write("ply\n")
+            file.write("format ascii 1.0\n")
+            file.write(f"element vertex {num_points}\n")
+            file.write("property float x\n")
+            file.write("property float y\n")
+            file.write("property float z\n")
+            file.write("property uchar red\n")   # 8-bit color
+            file.write("property uchar green\n") # 8-bit color
+            file.write("property uchar blue\n")  # 8-bit color
+            file.write("end_header\n")
+
+            # Writing the point data
+            for i in range(num_points):
+                x, y, z, r, g, b, *_ = points[i]  # Use * to ignore extra columns
+
+                if color_mode == 'rgb':
+                    file.write(f"{x} {y} {z} {int(r)} {int(g)} {int(b)}\n")
+                elif color_mode == 'intensity':
+                    color = cmap[int(normalized_intensities[i])]
+                    file.write(f"{x} {y} {z} {color[0]} {color[1]} {color[2]}\n")
+                elif color_mode == 'height':
+                    color = cmap[int(normalized_heights[i])]
+                    file.write(f"{x} {y} {z} {color[0]} {color[1]} {color[2]}\n")
+
+            file.close()
+        
     
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         fn = self.file_name_from_row(row)
         fn = os.path.join(self.point_cloud_root, fn)
 
+        # Save dir for the ply files
+        save_dir = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/figures/point_cloud_processing_pipeline/"
+        color_mode = 'intensity'
         try: 
             
             assert os.path.exists(fn), f"Point cloud file {fn} does not exist"
 
-            points = self.load_point_cloud(fn)
+            points = self.load_point_cloud(fn) # x, y, z, r, g, b, intensity, class_id (laz class id)
 
+            # Save the points as a ply file (x, y, z, r, g, b)
+            fn_after_load = os.path.join(save_dir, "1_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}.ply"))
+            print("---------------------------------")
+            print("Step 1: Load the point cloud")
+            self.points_2_ply(points, fn_after_load, color_mode=color_mode)
+            
             # Remove the points which belong to class 7 (noise) or 18 (noise)
-            points = points[(points[:, 4] != 7) & (points[:, 4] != 18)]
-            xyzi = points[:, :4]
-
+            print("---------------------------------")
+            print("Step 2: Remove noise points")
+            print(f"Before removing noise points: {points.shape}")
+            points = points[(points[:, -1] != 7) & (points[:, -1] != 18)]
+            print(f"After removing noise points: {points.shape}")
+            
             # Remove points which for whatever reason have a negative x, y or z value
-            xyzi = xyzi[xyzi[:, 0] > 0]
-            xyzi = xyzi[xyzi[:, 1] > 0]
-            xyzi = xyzi[xyzi[:, 2] > 0]
+            print("---------------------------------")
+            print("Step 3: Remove points with negative x, y or z value")
+            print(f"Before removing negative x, y or z values: {points.shape}")
+            points = points[points[:, 0] > 0]
+            points = points[points[:, 1] > 0]
+            points = points[points[:, 2] > 0]
+            print(f"After removing negative x, y or z values: {points.shape}")
 
             # Identify center of the point cloud and apply a circular mask using Pythagoras theorem
-            center_x, center_y = (np.max(xyzi[:, 0]) + np.min(xyzi[:, 0])) / 2, (np.max(xyzi[:, 1]) + np.min(xyzi[:, 1])) / 2
-            xyzi = self.apply_circle_mask(xyzi, self.radius, center_x, center_y)
+            print("---------------------------------")
+            print("Step 4: Apply circular mask")
+            center_x, center_y = (np.max(points[:, 0]) + np.min(points[:, 0])) / 2, (np.max(points[:, 1]) + np.min(points[:, 1])) / 2
+            points = self.apply_circle_mask(points, self.radius, center_x, center_y)
+            fn_after_circle_mask = os.path.join(save_dir, "2_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_circle_mask.ply"))
+            self.points_2_ply(points, fn_after_circle_mask, color_mode=color_mode)
 
             # Select a random subset of points given the self.num_points
-            if self.num_points is not None and xyzi.shape[0] >= self.num_points:
-                idx = np.random.choice(xyzi.shape[0], self.num_points, replace=False)
-                xyzi = xyzi[idx, :]
+            if self.num_points is not None and points.shape[0] >= self.num_points:
+                idx = np.random.choice(points.shape[0], self.num_points, replace=False)
+                points = points[idx, :]
 
             # Fill extra points into the points cloud if the number of points is less than the required number of points
-            if self.num_points is not None and xyzi.shape[0] < self.num_points:
-                n_points_to_fill = self.num_points - xyzi.shape[0]
-                idx = np.random.choice(xyzi.shape[0], n_points_to_fill, replace=True)
-                xyzi = np.concatenate([xyzi, xyzi[idx, :]], axis=0)
+            if self.num_points is not None and points.shape[0] < self.num_points:
+                n_points_to_fill = self.num_points - points.shape[0]
+                idx = np.random.choice(points.shape[0], n_points_to_fill, replace=True)
+                points = np.concatenate([points, points[idx, :]], axis=0)
 
             data = {
-                'pos': xyzi[:,:3],
+                'pos': points[:,:3],
                 'y': row["class_id"]
             }
 
@@ -162,13 +260,13 @@ class BioVista(Dataset):
             
             # Append the gravity dimension to the data (height of the point cloud)
             if "h" in self.channels:
-                point_heights = xyzi[:, self.gravity_dim:self.gravity_dim+1] - xyzi[:, self.gravity_dim:self.gravity_dim+1].min()
+                point_heights = points[:, self.gravity_dim:self.gravity_dim+1] - points[:, self.gravity_dim:self.gravity_dim+1].min()
                 point_heights_tensor = torch.from_numpy(point_heights) # 8192 x 1
                 data['x'] = torch.cat((data['x'], point_heights_tensor), dim=1)
             
             # Append the intensity dimension to the data
             if "i" in self.channels:
-                intensity_tensor = torch.from_numpy(xyzi[:,3][:, np.newaxis])
+                intensity_tensor = torch.from_numpy(points[:, 6][:, np.newaxis])
                 data['x'] = torch.cat((data['x'], intensity_tensor), dim=1)
 
             # Assert the data['x'] has the correct shape N x C=5
@@ -178,7 +276,9 @@ class BioVista(Dataset):
         except Exception as e:
             print(f"Error: {e} in file {fn}")
             return self.__getitem__(idx + 1)
-        
+    
+    def __len__(self):
+        return len(self.df)
 
 if __name__ == "__main__":
 
@@ -194,7 +294,8 @@ if __name__ == "__main__":
         data_root="/home/simon/data/BioVista/Forest-Biodiversity-Potential/samples.csv", 
         split='train', 
         transform=transforms,
-        format='laz'
+        format='npz'
     )
     print(len(dataset))
-    print(dataset[0])
+    
+    dataset.getitem_by_class_id_year_ogc_fid_and_sample_id(1, 2021, 18, 120)
