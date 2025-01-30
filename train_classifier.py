@@ -34,13 +34,13 @@ if __name__ == "__main__":
     parser.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyz")
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
     parser.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
-    parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=True)
-    parser.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=True)
+    parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=False)
+    parser.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=False)
     parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=False)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
     parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
-    parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Hyperparameter-Search")
+    parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Hyperparameter-Search-v2")
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
@@ -137,10 +137,5 @@ if __name__ == "__main__":
     if args.wandb:
         wandb.save(cfg.cfg_path)
         wandb.save(cfg.log_dir)
-
-    # if cfg.mode == 'pretrain':
-    #     main = pretrain
-    # else:
-    #     main = train
 
     train(0, cfg)
