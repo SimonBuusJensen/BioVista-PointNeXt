@@ -68,16 +68,15 @@ class BioVista(Dataset):
         point_cloud_array = point_cloud_array[mask]
         return point_cloud_array
 
-    def __len__(self):
-        return len(self.df)
-
     def file_name_from_row(self, row):
         id = row["sample_id"]
         ogc_fid = row["ogc_fid"]
         year = row["year"]
         class_name = row["class_name"].replace(" ", "_").lower()
-        fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.laz"
-
+        if self.format == 'npz':
+            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.npz"
+        else:
+            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.laz"
         return fn
 
     def load_point_cloud(self, fn):
@@ -113,6 +112,15 @@ class BioVista(Dataset):
             # Convert to N x C format e.g. 1000 X 5 where 5 is x, y, z, intensity and laz class id
             points = np.vstack(points).transpose()
             return points
+
+    def getitem_by_class_id_year_ogc_fid_and_sample_id(self, class_id, year, ogc_fid, sample_id):
+        for i in range(len(self.df)):
+            row = self.df.iloc[i]
+            if row['class_id'] == class_id and row['year'] == year and row['ogc_fid'] == ogc_fid and row['sample_id'] == sample_id:
+                idx = i
+                break
+           
+        return self.__getitem__(idx)
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
@@ -187,3 +195,6 @@ class BioVista(Dataset):
         except Exception as e:
             print(f"Error: {e} in file {fn}")
             return self.__getitem__(idx + 1)
+
+    def __len__(self):
+        return len(self.df)

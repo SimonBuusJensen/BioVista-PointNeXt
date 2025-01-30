@@ -9,6 +9,17 @@ from openpoints.utils import ConfusionMatrix
 from openpoints.utils import EasyConfig, cal_model_parm_nums, load_checkpoint
 from openpoints.dataset import build_dataloader_from_cfg
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
 if __name__ == "__main__":
 
     # Parse arguments
@@ -16,13 +27,15 @@ if __name__ == "__main__":
     argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
     argparse.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
                         #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_wihtout_empty_clouds.csv")
-                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_without_empty_clouds.csv")
+                          default="/workspace/datasets/samples.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/experiments/3D-PointVector-S/2024-10-22-15-27-33_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7/checkpoint/2024-10-22-15-27-33_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7_E8.pth")
-    argparse.add_argument("--shape_size_meters", type=int, help="Shape size in meters.", default=30)
+                          default="/workspace/datasets/experiments/3D-ALS-pointc-cloud-PointVector/Hyperparameter-Search_pointvector-s/2025-01-27-15-30-34_BioVista-Hyperparameter-Search_pointvector-s_6941/checkpoint/2025-01-27-15-30-34_BioVista-Hyperparameter-Search_pointvector-s_6941_ckpt_best.pth")
     argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=2)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=8192)
     argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
+    argparse.add_argument("--pcld_format", type=str, help="File format of the dataset.", default="npz")
+    argparse.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyz")
+    argparse.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=True)
 
     args, opts = argparse.parse_known_args()
     cfg = EasyConfig()
@@ -49,6 +62,16 @@ if __name__ == "__main__":
     cfg.dataset.common.data_root = source
     num_points = args.num_points
 
+    # Set the channels
+    cfg.model.encoder_args.in_channels = len(args.channels)
+    cfg.dataset.common.channels = args.channels
+    assert args.channels in ["xyz", "xyzi", "xyzh", "xyzhi", "xyzih"], "Channels must be one of xyz, xyzi, xyzh, xyzhi, xyzih"
+
+    if args.with_normalize_gravity_dim:
+        cfg.datatransforms.kwargs.normalize_gravity_dim = True
+    else:
+        cfg.datatransforms.kwargs.normalize_gravity_dim = False
+
     # Load the model given the config file cfg.yaml
     model = build_model_from_cfg(cfg.model)
     model_size = cal_model_parm_nums(model)
@@ -57,7 +80,7 @@ if __name__ == "__main__":
     # Load the model weights
     model_weights = args.model_weights
     assert os.path.exists(model_weights), f"Model weights file {model_weights} does not exist."
-    test_dir = os.path.join(os.path.dirname(source), "experiments", os.path.basename(model_weights).replace(".pth", ""))
+    test_dir = os.path.join(os.path.dirname(model_weights), os.path.basename(model_weights).replace(".pth", ""))
     if not os.path.exists(test_dir):
         os.makedirs(test_dir)
 
@@ -78,12 +101,15 @@ if __name__ == "__main__":
     if num_workers == 0:
         print("Warning: num_workers is set to 0. This might slow down the training process.")
 
+    # Assert pcld_format is either npz or laz
+    assert args.pcld_format in ["npz", "laz"], f"Point cloud format {args.pcld_format} is not supported."
+    cfg.dataset.common.format = args.pcld_format
+
     test_loader = build_dataloader_from_cfg(batch_size,
                                            cfg.dataset,
                                            cfg.dataloader,
                                            datatransforms_cfg=cfg.datatransforms,
-                                           split=dataset_split,
-                                           distributed=False
+                                           split=dataset_split
                                            )
     
     print(f"Number of samples in the {dataset_split} set: ", len(test_loader.dataset))
@@ -123,7 +149,7 @@ if __name__ == "__main__":
 
         tp, count = val_cm.tp, val_cm.count
         test_macc, test_oa, _ = val_cm.cal_acc(tp, count)
-        pred_label_fp = os.path.join(test_dir, f"prediction_labels.csv")
+        pred_label_fp = os.path.join(test_dir, f"test_prediction_labels.csv")
         with open(pred_label_fp, "w") as f:
             f.write("image_path,prediction,label,correct,confidence\n")
             for img_path, pred, label, conf in zip(img_path_list, pred_list, label_list, conf_list):

@@ -3,6 +3,7 @@ from pathlib import Path
 import os 
 import pandas as pd
 import numpy as np
+np.set_printoptions(suppress=True, precision=2)
 import laspy
 import matplotlib.pyplot as plt 
 import torch
@@ -154,12 +155,10 @@ class BioVista(Dataset):
             cmap = self.create_colormap(n_colors)
         
         if color_mode == 'height':
-            max_height = np.max(points[:, 2])
             min_height = np.min(points[:, 2])
-            print(f"Max height: {max_height}, Min height: {min_height}")
-            # Normalize the height values to 0-n_colors
-            normalized_heights = (points[:, 2] - min_height) / (max_height - min_height) * (n_colors - 1)
-            cmap = self.create_colormap(n_colors)
+            # Subtract the min height from the height values
+            normalized_heights = points[:, 2] - min_height
+            cmap = self.create_colormap(60)
 
         with open(fn, 'w') as file:
         # Writing the PLY header
@@ -197,12 +196,18 @@ class BioVista(Dataset):
 
         # Save dir for the ply files
         save_dir = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/figures/point_cloud_processing_pipeline/"
-        color_mode = 'intensity'
+        color_mode = 'height'
         try: 
             
             assert os.path.exists(fn), f"Point cloud file {fn} does not exist"
 
             points = self.load_point_cloud(fn) # x, y, z, r, g, b, intensity, class_id (laz class id)
+            print(f"Number of points in point cloud: {points.shape}")
+            # Print the min, max, mean and std of the x, y, z and intensity values
+            print("Min x, y, z, intensity: ", points.min(axis=0))
+            print("Max x, y, z, intensity: ", points.max(axis=0))
+            print("Mean x, y, z, intensity: ", points.mean(axis=0))
+            print("Std x, y, z, intensity: ", points.std(axis=0))
 
             # Save the points as a ply file (x, y, z, r, g, b)
             fn_after_load = os.path.join(save_dir, "1_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}.ply"))
@@ -230,8 +235,10 @@ class BioVista(Dataset):
             print("---------------------------------")
             print("Step 4: Apply circular mask")
             center_x, center_y = (np.max(points[:, 0]) + np.min(points[:, 0])) / 2, (np.max(points[:, 1]) + np.min(points[:, 1])) / 2
+            print("Center x: ", center_x)
+            print("Center y: ", center_y)
             points = self.apply_circle_mask(points, self.radius, center_x, center_y)
-            fn_after_circle_mask = os.path.join(save_dir, "2_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_circle_mask.ply"))
+            fn_after_circle_mask = os.path.join(save_dir, "4_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_circle_mask.ply"))
             self.points_2_ply(points, fn_after_circle_mask, color_mode=color_mode)
 
             # Select a random subset of points given the self.num_points
@@ -241,7 +248,7 @@ class BioVista(Dataset):
                 print(f"Number of points before random subset: {points.shape}")
                 idx = np.random.choice(points.shape[0], self.num_points, replace=False)
                 points = points[idx, :]
-                fn_after_random_subset = os.path.join(save_dir, "3_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_random_subset.ply"))
+                fn_after_random_subset = os.path.join(save_dir, "5_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_random_subset.ply"))
                 print("Number of points after random subset: ", points.shape)
                 self.points_2_ply(points, fn_after_random_subset, color_mode=color_mode)
 
@@ -257,10 +264,58 @@ class BioVista(Dataset):
             }
 
             # Apply the transform to the data 
-            # train: [PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
-            # val: [PointsToTensor, PointCloudXYZAlign]
-            if self.transform is not None:
-                data = self.transform(data)
+            # [PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
+        
+            # Apply the transform to the data 1 by 1
+            data = PointsToTensor()(data)
+            print("---------------------------------")
+            print("Step 6: Apply the scaling transform to the data")
+            xyz_array = data['pos'].numpy()
+            print("x, y, z length in meteres before scaling: ", xyz_array.max(axis=0) - xyz_array.min(axis=0))
+            print("Mean x, y, and z value before scaling: ", np.round(xyz_array.mean(axis=0), 2))
+            data = PointCloudScaling(scale=[0.9, 1.1])(data)
+            xyz_array = data['pos'].numpy()
+            print("x, y, z length in meteres after scaling: ", xyz_array.max(axis=0) - xyz_array.min(axis=0))
+            print("Mean x, y, and z value after scaling: ", xyz_array.mean(axis=0))
+            points = np.concatenate([xyz_array, points[:, 3:]], axis=1)
+            fn_after_scaling = os.path.join(save_dir, "6_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_scaling.ply"))
+            self.points_2_ply(points, fn_after_scaling, color_mode=color_mode)
+            
+            print("---------------------------------")
+            print("Step 7: Apply the random xyz align transform to the data")
+            data = PointCloudXYZAlign(gravity_dim=2)(data)
+            # Convert the data['pos'] to numpy
+            xyz_array = data['pos'].numpy()
+            print("Mean x, y, and z value after random xyz align: ", xyz_array.mean(axis=0))
+            points = np.concatenate([xyz_array, points[:, 3:]], axis=1)
+            fn_after_xyz_align = os.path.join(save_dir, "7_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_xyz_align.ply"))
+            self.points_2_ply(points, fn_after_xyz_align, color_mode=color_mode)
+        
+            print("---------------------------------")
+            print("Step 8: Apply the random rotation transform to the data")
+            max_x, min_x = xyz_array[:, 0].max(), xyz_array[:, 0].min()
+            max_y, min_y = xyz_array[:, 1].max(), xyz_array[:, 1].min()
+            print("Max x, min x, max y, min y before rotation: ", max_x, min_x, max_y, min_y)
+            data = PointCloudRotation(angle=[0, 0, 1])(data)
+            xyz_array = data['pos'].numpy()
+            points = np.concatenate([xyz_array, points[:, 3:]], axis=1)
+            fn_after_rotation = os.path.join(save_dir, "8_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_rotation.ply"))
+            self.points_2_ply(points, fn_after_rotation, color_mode=color_mode)
+            max_x, min_x = xyz_array[:, 0].max(), xyz_array[:, 0].min()
+            max_y, min_y = xyz_array[:, 1].max(), xyz_array[:, 1].min()
+            print("Max x, min x, max y, min y after rotation: ", max_x, min_x, max_y, min_y)
+            
+            print("---------------------------------")
+            print("Step 9: Apply the random jitter transform to the data")
+            mean_x, mean_y, mean_z = xyz_array.mean(axis=0)
+            print("Mean x, y, z value before jitter: ", mean_x, mean_y, mean_z)
+            data = PointCloudJitter(jitter_clip=0.02, jitter_sigma=0.005)(data)
+            xyz_array = data['pos'].numpy()
+            points = np.concatenate([xyz_array, points[:, 3:]], axis=1)
+            fn_after_jitter = os.path.join(save_dir, "9_" + os.path.basename(fn).replace(f".{self.format}", f"_{color_mode}_jitter.ply"))
+            self.points_2_ply(points, fn_after_jitter, color_mode=color_mode)
+            mean_x, mean_y, mean_z = xyz_array.mean(axis=0)
+            print("Mean x, y, z value after jitter: ", mean_x, mean_y, mean_z)
 
             data['x'] = data['pos']
             
@@ -287,26 +342,14 @@ class BioVista(Dataset):
         return len(self.df)
 
 if __name__ == "__main__":
-
-    color_drop = 0.2
-    angle = [0, 0, 1]
-    jitter_sigma = 0.005
-    jitter_clip= 0.02
-    transforms = Compose([
-        PointsToTensor(),
-        PointCloudScaling(scale=[0.9, 1.1]),
-        PointCloudXYZAlign(),
-        PointCloudRotation(),
-        PointCloudJitter(jitter_clip=jitter_clip, jitter_sigma=jitter_sigma)
-    ])
-
     dataset = BioVista(
         data_root="/home/simon/data/BioVista/Forest-Biodiversity-Potential/samples.csv", 
         split='train', 
-        transform=transforms,
+        transform=None,
+        channels="xyzih",
         format='npz',
         num_points=8192
     )
     print(len(dataset))
     
-    dataset.getitem_by_class_id_year_ogc_fid_and_sample_id(1, 2021, 18, 120)
+    dataset.getitem_by_class_id_year_ogc_fid_and_sample_id(1, 2021, 11, 290)

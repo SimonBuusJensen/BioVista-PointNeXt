@@ -76,13 +76,19 @@ class PointCloudXYZAlign(object):
 
     def __init__(self,
                  gravity_dim=2,
+                 normalize_gravity_dim=True,
                  **kwargs):
         self.gravity_dim = gravity_dim
+        self.normalize_gravity_dim = normalize_gravity_dim
 
     def __call__(self, data):
         if hasattr(data, 'keys'):
-            data['pos'] -= torch.mean(data['pos'], axis=0, keepdims=True)
-            data['pos'][:, self.gravity_dim] -= torch.min(data['pos'][:, self.gravity_dim])
+            if self.normalize_gravity_dim:
+                data['pos'] -= torch.mean(data['pos'], axis=0, keepdims=True)
+                data['pos'][:, self.gravity_dim] -= torch.min(data['pos'][:, self.gravity_dim])
+            else:
+                data['pos'][:, :self.gravity_dim] -= torch.mean(data['pos'][:, :self.gravity_dim], axis=0, keepdims=True)
+            
         else:
             data -= torch.mean(data, axis=0, keepdims=True)
             data[:, self.gravity_dim] -= torch.min(data[:, self.gravity_dim])

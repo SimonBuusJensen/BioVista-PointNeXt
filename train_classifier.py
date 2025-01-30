@@ -35,6 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
     parser.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=True)
+    parser.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=True)
     parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=False)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
@@ -76,16 +77,20 @@ if __name__ == "__main__":
     
     # Data Augmentation list
     if args.with_point_cloud_scaling:
-        cfg.datatransforms.train.insert(1, "PointCloudScaling")
+        cfg.datatransforms.train.append("PointCloudScaling")
     if args.with_point_cloud_rotations:
         cfg.datatransforms.train.append("PointCloudRotation")
     if args.with_point_cloud_jitter:
         cfg.datatransforms.train.append("PointCloudJitter")
+    if args.with_normalize_gravity_dim:
+        cfg.datatransforms.kwargs.normalize_gravity_dim = True
+    else:
+        cfg.datatransforms.kwargs.normalize_gravity_dim = False
     
     # Parse the model name from the cfg file
     model_name = os.path.basename(args.cfg).split('.')[0]
     date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_{cfg.seed}"
+    experiment_name = f"{date_now_str}_{args.project_name}_{model_name}_channels_{args.channels}_npts_{args.num_points}_qb_r_{args.qb_radius}_qb_s_{args.qb_radius_scaling}"
     
     if args.wandb:
         cfg.wandb.use_wandb = True
