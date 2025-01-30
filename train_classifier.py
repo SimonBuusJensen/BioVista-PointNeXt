@@ -28,7 +28,9 @@ if __name__ == "__main__":
                         # default="/workspace/datasets/samples.csv") 
                         default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=20)
+    parser.add_argument("--pcl_file_format", type=str, help="Point cloud file format (npz | laz)", default="npz")
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=4)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=4096)
     parser.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyz")
@@ -55,9 +57,13 @@ if __name__ == "__main__":
     assert os.path.exists(cfg.dataset.common.data_root), f"Dataset csv file {cfg.dataset.common.data_root} does not exist"
     cfg.root_dir = os.path.join(os.path.dirname(args.dataset_csv), "experiments")
 
+    # Set the point cloud file format
+    cfg.dataset.common.format = args.pcl_file_format
+
     # Set epochs, batch size and learning rate
     cfg.epochs = args.epochs
     cfg.batch_size = args.batch_size
+    cfg.dataloader.num_workers = args.num_workers # TODO check if this is correct
     assert args.batch_size > 0 and args.epochs > 0, "Batch size and epochs must be greater than 0"
     cfg.val_batch_size = args.batch_size
     cfg.lr = args.lr
