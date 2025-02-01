@@ -293,18 +293,19 @@ def save_points(points, fn, color_mode, calculate_center=True):
 if __name__ == "__main__":
 
 
-    fn = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/high_biodiversity_forest_2021_ogc_fid_11_290_30m.npz"
+    # fn = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/low_biodiversity_forest_2023_ogc_fid_18_3_30m.npz"
+    fn = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/high_biodiversity_forest_2019_ogc_fid_1_6_30m.npz"
     # fn = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/low_biodiversity_forest_2020_ogc_fid_11__30m.npz"
     channels = 'xyzih'
     format = 'npz'
-    color_mode = 'rgb' # rgb, intensity, height
+    color_mode = 'intensity' # rgb, intensity, height
     radius = 15
     num_points = 8192
     gravity_dim = 2
     is_save_points = True
 
     # Save dir for the ply files
-    save_dir = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/figures/point_cloud_processing_pipeline/"
+    save_dir = "/home/simon/data/BioVista/Forest-Biodiversity-Potential/figures/point_cloud_processing_pipeline/high_biodiversity_forest_2019_ogc_fid_1_6_30m"
     assert os.path.exists(fn), f"Point cloud file {fn} does not exist"
 
     points = load_point_cloud(fn) # x, y, z, r, g, b, intensity, class_id (laz class id)

@@ -137,9 +137,7 @@ class BioVista(Dataset):
             points = points[(points[:, 4] != 7) & (points[:, 4] != 18)]
             xyzi = points[:, :4]
 
-            # Remove points which for whatever reason have a negative x, y or z value
-            xyzi = xyzi[xyzi[:, 0] > 0]
-            xyzi = xyzi[xyzi[:, 1] > 0]
+            # Remove points which for whatever reason have a negative z values (below the ground)
             xyzi = xyzi[xyzi[:, 2] > 0]
 
             # Identify center of the point cloud and apply a circular mask using Pythagoras theorem

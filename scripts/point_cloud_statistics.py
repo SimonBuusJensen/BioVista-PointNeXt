@@ -109,7 +109,7 @@ def process_csv(input_csv, point_cloud_dir, output_csv, file_format):
     df = pd.read_csv(input_csv)
 
     # Sample only the rows where dataset_split is 'val'
-    df = df[df["dataset_split"] == "val"]
+    df = df[df["dataset_split"] == "test"]
 
     with open(output_csv, "w") as f:
 
