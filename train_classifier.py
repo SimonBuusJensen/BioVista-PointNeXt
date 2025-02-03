@@ -37,7 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
     parser.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=False)
-    parser.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=False)
+    parser.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=True)
     parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=False)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
