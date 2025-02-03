@@ -34,13 +34,14 @@ df = pd.read_csv(csv_file)
 filtered_df = df[
     # (df['project_name'] == 'BioVista-Hyperparameter-Search-v2') &
     (df['channels'] == 'xyz') &
-    # (df['num_points'] == 8192) &
     (df['num_points'] == 16384) &
+    # (df['num_points'] == 24576) &
+    (df['qb_radius'] == 0.7) &
     (df['with_class_weights'] == False) &
     (df['with_point_cloud_jitter'] == False) &
     (df['with_point_cloud_rotations'] == False) &
     (df['with_point_cloud_scaling'] == False) &
-    (df['with_normalize_gravity_dim'] == False) &
+    (df['with_normalize_gravity_dim'] == True) &
     (df['lr'] == 0.0001)  & 
     (df['batch_size'] == 8)
 ]
