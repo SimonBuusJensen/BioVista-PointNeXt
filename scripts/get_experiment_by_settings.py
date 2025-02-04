@@ -50,7 +50,26 @@ filtered_df = df[
 print(filtered_df)
 
 # Print the min, max, mean and std of the test_oacc
-print(round(filtered_df['test_oa'].mean(), 2))
-print(round(filtered_df['test_oa'].std(), 2))
-print(round(filtered_df['test_oa'].min(), 2))
-print(round(filtered_df['test_oa'].max(), 2))
+print("Test OACC")
+print(round(filtered_df['test_oacc'].mean(), 2))
+print(round(filtered_df['test_oacc'].std(), 2))
+print(round(filtered_df['test_oacc'].min(), 2))
+print(round(filtered_df['test_oacc'].max(), 2))
+
+print("Test Acc High")
+print(round(filtered_df['test_acc_high'].mean(), 2))
+print(round(filtered_df['test_acc_high'].std(), 2))
+print(round(filtered_df['test_acc_high'].min(), 2))
+print(round(filtered_df['test_acc_high'].max(), 2))
+
+print("Test Acc Low")
+print(round(filtered_df['test_acc_low'].mean(), 2))
+print(round(filtered_df['test_acc_low'].std(), 2))
+print(round(filtered_df['test_acc_low'].min(), 2))
+print(round(filtered_df['test_acc_low'].max(), 2))
+
+print("Test MAcc")
+print(round(filtered_df['test_macc'].mean(), 2))
+print(round(filtered_df['test_macc'].std(), 2))
+print(round(filtered_df['test_macc'].min(), 2))
+print(round(filtered_df['test_macc'].max(), 2))
