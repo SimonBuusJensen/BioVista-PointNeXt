@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
         # plt.title("Intensity Distribution for All Points")
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"{file_name}_intensity_distribution_all_points.png"))
+        plt.savefig(os.path.join(output_dir, f"{file_name}_intensity_distribution_all_points.png"), dpi=1000)
         plt.close()
 
         # Select ground points (class id == 2)
@@ -126,12 +126,19 @@ if __name__ == "__main__":
 
             counts, bin_edges, patches = plt.hist(intensity_ground, bins=n_bins, edgecolor='black', alpha=0.7)
 
-            # Use the bin_edges to determine the color of each patch
+            # Use the bin_edges to determine the color of each patch 
             color_array = cmap / 255.0
-
+ 
             for bin_edge, patch in zip(bin_edges, patches):
                 idx = int((bin_edge - np.min(bin_edges)) / (np.max(bin_edges) - np.min(bin_edges)) * 255)
                 patch.set_facecolor(color_array[idx])
+
+            # Set a vertical line at the mode
+            counts, bins = np.histogram(intensity_ground, bins=n_bins)
+            mode = bins[np.argmax(counts)]
+            print(mode)
+            plt.axvline(mode, color='black', linestyle='dashed', linewidth=2)
+
 
             # plt.hist(intensity_ground, bins=n_bins, color=ground_color, edgecolor='black', alpha=0.7)
             plt.xlabel("Intensity")
@@ -139,7 +146,9 @@ if __name__ == "__main__":
             # plt.title("Intensity Distribution for Ground Points")
             plt.grid(axis='y', linestyle='--', alpha=0.7)
             plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, f"{file_name}_intensity_distribution_ground_points.png"))
+
+
+            plt.savefig(os.path.join(output_dir, f"{file_name}_intensity_distribution_ground_points.png"), dpi=1000)
             plt.close()
         else:
             print("No ground points (class id == 2) found in the data.")
