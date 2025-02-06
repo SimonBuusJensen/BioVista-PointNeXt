@@ -29,20 +29,22 @@ if __name__ == "__main__":
                         default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=20)
     parser.add_argument("--pcl_file_format", type=str, help="Point cloud file format (npz | laz)", default="npz")
-    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=1)
-    parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=12)
+    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
-    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=4096)
-    parser.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyz")
-    parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.7)
+    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=8192)
+    parser.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyzhi")
+    parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.65)
     parser.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=False)
     parser.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=False)
-    parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=False)
+    parser.add_argument("--with_normalize_intensity", type=str2bool, help="Whether to normalize the intensity", default=False)
+    parser.add_argument("--normalize_intensity_scale", type=float, help="Scale to factor to the normalization of the intensity", default=1.0)
+    parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=True)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
     parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
-    parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Hyperparameter-Search-v2")
+    parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Intensity-Experiments_v1")
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
@@ -72,6 +74,8 @@ if __name__ == "__main__":
     cfg.num_points = args.num_points
     cfg.model.encoder_args.in_channels = len(args.channels)
     cfg.dataset.common.channels = args.channels
+    cfg.dataset.common.normalize_intensity = args.with_normalize_intensity
+    cfg.dataset.common.normalize_intensity_scale = args.normalize_intensity_scale
     assert args.channels in ["xyz", "xyzi", "xyzh", "xyzhi", "xyzih"], "Channels must be one of xyz, xyzi, xyzh, xyzhi, xyzih"
 
     # Set the Query ball parameters

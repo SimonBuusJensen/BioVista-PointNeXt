@@ -20,6 +20,8 @@ class BioVista(Dataset):
                  num_points=8192,
                  channels="xyzi",
                  transform=None,
+                 normalize_intensity=False,
+                 normalize_intensity_scale=1.0,
                  format='npz'
                  ):
 
@@ -31,6 +33,9 @@ class BioVista(Dataset):
         self.num_points = num_points
         self.channels = channels
         self.n_channels = len(channels)
+        if "i" in channels:
+            self.normalize_intensity = normalize_intensity
+            self.normalize_intensity_scale = normalize_intensity_scale
 
         self.shape_size = 30
         self.radius = int(self.shape_size / 2)
@@ -135,32 +140,37 @@ class BioVista(Dataset):
 
             # Remove the points which belong to class 7 (noise) or 18 (noise)
             points = points[(points[:, 4] != 7) & (points[:, 4] != 18)]
-            xyzi = points[:, :4]
 
             # Remove points which for whatever reason have a negative z values (below the ground)
-            xyzi = xyzi[xyzi[:, 2] > 0]
+            points = points[points[:, 2] > 0]
+
+            if "i" in self.channels and self.normalize_intensity:
+                    mask = (points[:, 4] == 2) | (points[:, 4] == 3)
+                    ground_intnsity_array = points[mask][:, 3]
+
+                    # Calculate the mode of the intensity values using np.hist
+                    counts, bins = np.histogram(ground_intnsity_array, bins=50)
+                    mode = bins[np.argmax(counts)]
 
             # Identify center of the point cloud and apply a circular mask using Pythagoras theorem
-            center_x, center_y = (np.max(
-                xyzi[:, 0]) + np.min(xyzi[:, 0])) / 2, (np.max(xyzi[:, 1]) + np.min(xyzi[:, 1])) / 2
-            xyzi = self.apply_circle_mask(
-                xyzi, self.radius, center_x, center_y)
+            center_x, center_y = (np.max(points[:, 0]) + np.min(points[:, 0])) / 2, (np.max(points[:, 1]) + np.min(points[:, 1])) / 2
+            points = self.apply_circle_mask(points, self.radius, center_x, center_y)
 
             # Select a random subset of points given the self.num_points
-            if self.num_points is not None and xyzi.shape[0] >= self.num_points:
+            if self.num_points is not None and points.shape[0] >= self.num_points:
                 idx = np.random.choice(
-                    xyzi.shape[0], self.num_points, replace=False)
-                xyzi = xyzi[idx, :]
+                    points.shape[0], self.num_points, replace=False)
+                points = points[idx, :]
 
             # Fill extra points into the points cloud if the number of points is less than the required number of points
-            if self.num_points is not None and xyzi.shape[0] < self.num_points:
-                n_points_to_fill = self.num_points - xyzi.shape[0]
+            if self.num_points is not None and points.shape[0] < self.num_points:
+                n_points_to_fill = self.num_points - points.shape[0]
                 idx = np.random.choice(
-                    xyzi.shape[0], n_points_to_fill, replace=True)
-                xyzi = np.concatenate([xyzi, xyzi[idx, :]], axis=0)
+                    points.shape[0], n_points_to_fill, replace=True)
+                points = np.concatenate([points, points[idx, :]], axis=0)
 
             data = {
-                'pos': xyzi[:, :3],
+                'pos': points[:, :3],
                 'y': row["class_id"]
             }
 
@@ -174,22 +184,31 @@ class BioVista(Dataset):
 
             # Append the gravity dimension to the data (height of the point cloud)
             if "h" in self.channels:
-                point_heights = xyzi[:, self.gravity_dim:self.gravity_dim +
-                                     1] - xyzi[:, self.gravity_dim:self.gravity_dim+1].min()
-                point_heights_tensor = torch.from_numpy(
-                    point_heights)  # 8192 x 1
+                point_heights = points[:, self.gravity_dim:self.gravity_dim +
+                                     1] - points[:, self.gravity_dim:self.gravity_dim+1].min()
+                point_heights_tensor = torch.from_numpy(point_heights) 
                 data['x'] = torch.cat((data['x'], point_heights_tensor), dim=1)
 
             # Append the intensity dimension to the data
             if "i" in self.channels:
-                intensity_tensor = torch.from_numpy(xyzi[:, 3][:, np.newaxis])
+                intensity_array = points[:, 3]
+            
+                if self.normalize_intensity:
+                    if self.normalize_intensity_scale == 1.0:
+                        intensity_array = (intensity_array / mode)
+                    else:
+                        intensity_array = (intensity_array / mode) * self.normalize_intensity_scale
+                   
+
+                intensity_tensor = torch.from_numpy(intensity_array[:, np.newaxis])
+                
                 data['x'] = torch.cat((data['x'], intensity_tensor), dim=1)
 
             # Assert the data['x'] has the correct shape N x C=5
-            assert data['x'].shape[
-                1] == self.n_channels, f"Data['x'] has shape {data['x'].shape} instead of N x C={self.n_channels}"
+            assert data['x'].shape[1] == self.n_channels, f"Data['x'] has shape {data['x'].shape} instead of N x C={self.n_channels}"
 
             return fn, data
+        
         except Exception as e:
             print(f"Error: {e} in file {fn}")
             return self.__getitem__(idx + 1)

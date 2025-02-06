@@ -28,6 +28,7 @@ import os
 
 
 csv_file = "/home/simon/Downloads/all-pointvector-als-experiments.csv"
+# csv_file = "/home/simon/Downloads/wandb_export_2025-02-06T12_14_13.495+01_00.csv"
 df = pd.read_csv(csv_file)
 
 # Filter the dataframe
@@ -36,12 +37,12 @@ filtered_df = df[
     (df['channels'] == 'xyzh') &
     (df['num_points'] == 16384) &
     # (df['num_points'] == 24576) &
-    (df['qb_radius'] == 0.7) &
+    ((df['qb_radius'] == 0.65) | (df['qb_radius'] == 0.7)) &
     (df['qb_radius_scaling'] == 1.5) &
-    (df['with_class_weights'] == False) &
+    # (df['with_class_weights'] == False) &
     (df['with_point_cloud_jitter'] == False) &
     (df['with_point_cloud_rotations'] == False) &
-    (df['with_point_cloud_scaling'] == True) &
+    (df['with_point_cloud_scaling'] == False) &
     (df['with_normalize_gravity_dim'] == False) &
     (df['lr'] == 0.0001)  & 
     (df['batch_size'] == 8)
