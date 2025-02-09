@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Process and plot point cloud intensity distributions.")
     parser.add_argument("--file_path", type=str,
-                        default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/high_biodiversity_forest_2019_ogc_fid_32_157_30m.npz",
+                        default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/low_biodiversity_forest_2023_ogc_fid_2_39_30m.npz",
                         help="Path to point cloud file.")
     parser.add_argument("--format", type=str, choices=["npz", "laz"], default="npz",
                         help="Point cloud file format (default: npz).")
@@ -83,6 +83,8 @@ if __name__ == "__main__":
     file_path = args.file_path
     file_format = args.format
     output_dir = args.output_dir
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     file_name = os.path.basename(file_path).replace(".npz", "").replace(".laz", "")
 
     ground_color = '#b3a47c'

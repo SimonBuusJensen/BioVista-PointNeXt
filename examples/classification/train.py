@@ -79,7 +79,7 @@ def main(gpu, cfg):
                                              split='train'
                                              )
     # DEBUG: Sample 5000 random samples. Change the train_loader.dataset.df to a subset of the original dataset
-    # train_loader.dataset.df = train_loader.dataset.df.sample(5000) # TODO: Remove this line
+    # train_loader.dataset.df = train_loader.dataset.df.sample(3000) # TODO: Remove this line
 
     logging.info(f"length of training dataset: {len(train_loader.dataset)}")
     cfg.dataset.val.num_points = cfg.num_points
@@ -399,6 +399,8 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, epoch, cfg):
         data['pos'] = points[:, :, :3].contiguous()
         data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
         logits, loss = model.get_logits_loss(data, target) if not hasattr(model, 'module') else model.module.get_logits_loss(data, target)
+        # Print the loss 
+        # print(f"Logits: {logits}, Loss: {loss}")
         loss.backward()
 
         # optimize
