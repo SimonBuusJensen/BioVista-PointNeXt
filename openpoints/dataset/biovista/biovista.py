@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 from ..build import DATASETS
 import os
+import logging
 import pandas as pd
 import numpy as np
 import laspy
@@ -145,17 +146,22 @@ class BioVista(Dataset):
             points = points[points[:, 2] > 0]
 
             if "i" in self.channels and self.normalize_intensity:
-                mask = (points[:, 4] == 2) | (points[:, 4] == 3)
-                ground_intnsity_array = points[mask][:, 3]
 
-                # Calculate the mode of the intensity values using np.hist
-                counts, bins = np.histogram(ground_intnsity_array, bins=50)
-                mode = bins[np.argmax(counts)]
-                if mode == 0:
-                    # If the mode is 0 we use the second most common value, as 0 will cause division by zero errors if with_normalize_intensity is True
-                    print(f"Mode is 0 in file {fn}")
-                    mode = bins[np.argsort(counts)[-2]]
-                    print("Using second most common value as mode: ", mode)
+                try:
+                    mode = round(row["mode"], 2)
+                except:
+                    logging.info(f"Mode not found in file {fn}. Calculating mode from the intensity values")
+                    mask = (points[:, 4] == 2) | (points[:, 4] == 3)
+                    ground_intnsity_array = points[mask][:, 3]
+
+                    # Calculate the mode of the intensity values using np.hist
+                    counts, bins = np.histogram(ground_intnsity_array, bins=50)
+                    mode = bins[np.argmax(counts)]
+                    if mode == 0:
+                        # If the mode is 0 we use the second most common value, as 0 will cause division by zero errors if with_normalize_intensity is True
+                        mode = bins[np.argsort(counts)[-2]]
+                        assert mode != 0, f"Second most common value is 0 in file {fn}"
+                        logging.info(f"Mode is 0 in file {fn}. Using second most common value as mode: ", mode)
 
             # Identify center of the point cloud and apply a circular mask using Pythagoras theorem
             center_x, center_y = (np.max(points[:, 0]) + np.min(points[:, 0])) / 2, (np.max(points[:, 1]) + np.min(points[:, 1])) / 2
@@ -206,8 +212,7 @@ class BioVista(Dataset):
                 
                 # Check for nans in the intensity array
                 if np.isnan(intensity_array).any():
-                    print(f"Intensity array has nans in file {fn}")
-                    # return self.__getitem__(idx + 1)
+                    logging.info(f"Intensity array has nans in file {fn}")
 
                 intensity_tensor = torch.from_numpy(intensity_array[:, np.newaxis])
                 
@@ -219,7 +224,7 @@ class BioVista(Dataset):
             return fn, data
         
         except Exception as e:
-            print(f"Error: {e} in file {fn}")
+            logging.info(f"Error: {e} in file {fn}")
             return self.__getitem__(idx + 1)
 
     def __len__(self):
