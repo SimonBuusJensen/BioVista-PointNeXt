@@ -43,6 +43,7 @@ if __name__ == "__main__":
     parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=True)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=True)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=True)
+    parser.add_argument("--seed", type=int, help="Random seed", default=None)
     parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Intensity-Experiments_v1")
 
@@ -52,7 +53,10 @@ if __name__ == "__main__":
     cfg.update(opts)
     
     # Set the seed
-    cfg.seed = np.random.randint(1, 10000)
+    if args.seed is not None:
+        cfg.seed = np.random.randint(1, 10000)
+    else:
+        cfg.seed = args.seed
     
     # Set the dataset csv file
     cfg.dataset.common.data_root = args.dataset_csv

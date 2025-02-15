@@ -5,8 +5,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from openpoints.models import build_model_from_cfg
-from openpoints.utils import ConfusionMatrix
-from openpoints.utils import EasyConfig, cal_model_parm_nums, load_checkpoint
+from openpoints.utils import EasyConfig, cal_model_parm_nums, load_checkpoint, ConfusionMatrix, set_random_seed
 from openpoints.dataset import build_dataloader_from_cfg
 
 def str2bool(v):
@@ -29,18 +28,24 @@ if __name__ == "__main__":
                         #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_wihtout_empty_clouds.csv")
                           default="/workspace/datasets/samples.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/workspace/datasets/experiments/3D-ALS-pointc-cloud-PointVector/Hyperparameter-Search_pointvector-s/2025-01-27-15-30-34_BioVista-Hyperparameter-Search_pointvector-s_6941/checkpoint/2025-01-27-15-30-34_BioVista-Hyperparameter-Search_pointvector-s_6941_ckpt_best.pth")
-    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=2)
-    argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=8192)
+                          default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=1)
+    argparse.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.65)
+    argparse.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
+    argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=16384)
     argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
     argparse.add_argument("--pcld_format", type=str, help="File format of the dataset.", default="npz")
-    argparse.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyz")
-    argparse.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=True)
+    argparse.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyzh")
+    argparse.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=False)
+    argparse.add_argument("--seed", type=int, help="Random seed", default=9447)
 
     args, opts = argparse.parse_known_args()
     cfg = EasyConfig()
     cfg.load(args.cfg, recursive=True)
     cfg.update(opts)
+
+    # Set the seed
+    set_random_seed(args.seed, deterministic=cfg.deterministic)
 
     # Parse the source and validate it
     source = args.source 
@@ -59,13 +64,16 @@ if __name__ == "__main__":
     print("-------------------------------------------------------------------")
     print(f"Found {len(df)} image paths in the csv file.")
     
+     # Set the number of points in the point cloud and the channels
     cfg.dataset.common.data_root = source
-    num_points = args.num_points
-
-    # Set the channels
-    cfg.model.encoder_args.in_channels = len(args.channels)
+    cfg.dataset.common.num_points = args.num_points
     cfg.dataset.common.channels = args.channels
     assert args.channels in ["xyz", "xyzi", "xyzh", "xyzhi", "xyzih"], "Channels must be one of xyz, xyzi, xyzh, xyzhi, xyzih"
+
+    # Set the Query ball parameters
+    cfg.model.encoder_args.radius = args.qb_radius
+    cfg.model.encoder_args.radius_scaling = args.qb_radius_scaling
+    cfg.model.encoder_args.in_channels = len(args.channels)
 
     if args.with_normalize_gravity_dim:
         cfg.datatransforms.kwargs.normalize_gravity_dim = True
@@ -80,7 +88,7 @@ if __name__ == "__main__":
     # Load the model weights
     model_weights = args.model_weights
     assert os.path.exists(model_weights), f"Model weights file {model_weights} does not exist."
-    test_dir = os.path.join(os.path.dirname(model_weights), os.path.basename(model_weights).replace(".pth", ""))
+    test_dir = os.path.join(os.path.dirname(os.path.dirname(model_weights)))
     if not os.path.exists(test_dir):
         os.makedirs(test_dir)
 
@@ -122,7 +130,7 @@ if __name__ == "__main__":
         conf_list = []
         label_list = []
         img_path_list = []
-        val_cm = ConfusionMatrix(num_classes=cfg.num_classes)
+        test_cm = ConfusionMatrix(num_classes=cfg.num_classes)
 
         pbar = tqdm(enumerate(test_loader), total=test_loader.__len__())
         for idx, (fns, data) in pbar:
@@ -131,11 +139,11 @@ if __name__ == "__main__":
                 data[key] = data[key].cuda(non_blocking=True)
             target = data['y']
             points = data['x']
-            points = points[:, :num_points]
+
             data['pos'] = points[:, :, :3].contiguous()
             data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
             logits = model(data)
-            val_cm.update(logits.argmax(dim=1), target)
+            test_cm.update(logits.argmax(dim=1), target)
 
             # Save the predictions and labels
             pred_list.extend(logits.argmax(dim=1).cpu().numpy())
@@ -147,8 +155,8 @@ if __name__ == "__main__":
             label_list.extend(target.cpu().numpy())
             img_path_list.extend(fns)
 
-        tp, count = val_cm.tp, val_cm.count
-        test_macc, test_oa, _ = val_cm.cal_acc(tp, count)
+        tp, count = test_cm.tp, test_cm.count
+        test_macc, test_oa, _ = test_cm.cal_acc(tp, count)
         pred_label_fp = os.path.join(test_dir, f"test_prediction_labels.csv")
         with open(pred_label_fp, "w") as f:
             f.write("image_path,prediction,label,correct,confidence\n")
@@ -156,14 +164,14 @@ if __name__ == "__main__":
                 f.write(
                     f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
             # Write overall high, low and total accuracy
-            low_total = val_cm.actual[0].item()
-            low_correct = val_cm.tp[0].item() 
+            low_total = test_cm.actual[0].item()
+            low_correct = test_cm.tp[0].item() 
             low_acc = (low_correct / low_total) * 100 if low_total > 0 else 0
             f.write(f"Low bio correct,{low_correct},{low_total},{low_acc}\n")
-            high_total = val_cm.actual[1].item()
-            high_correct = val_cm.tp[1].item()
+            high_total = test_cm.actual[1].item()
+            high_correct = test_cm.tp[1].item()
             high_acc = (high_correct / high_total) * 100 if high_total > 0 else 0
             f.write(f"High bio correct,{high_correct},{high_total},{high_acc}\n")
-            f.write(f"Overall test accuracy,{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{test_oa}\n")
+            f.write(f"Overall test accuracy,{test_cm.tp.sum().item()},{test_cm.actual.sum().item()},{test_oa}\n")
             f.write(f"Mean test accuracy,{test_macc}\n")
         f.close()

@@ -5,8 +5,18 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from openpoints.models import build_model_from_cfg
-from openpoints.utils import EasyConfig, cal_model_parm_nums, load_checkpoint
+from openpoints.utils import EasyConfig, cal_model_parm_nums, load_checkpoint, set_random_seed, ConfusionMatrix
 from openpoints.dataset import build_dataloader_from_cfg
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
 def is_valid_source(source: str) -> bool:
@@ -39,25 +49,41 @@ if __name__ == "__main__":
 
     # Parse arguments
     argparse = argparse.ArgumentParser(description="Generate feature encodings for 3D Point clouds using a trained Point Vector Model")
-    argparse.add_argument('--cfg', type=str, help='config file', default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+    argparse.add_argument('--cfg', type=str, help='config file', 
+                        #   default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+                          default="cfgs/biovista/pointvector-s.yaml")
     argparse.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                          default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/tmp.csv")
-                        #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-train-val-dataset/high_and_low_HNV-forest-proxy-train-val-polygon-dataset_30_m_circles_dataset_without_empty_clouds.csv")
-                        #   default="/workspace/datasets/high_and_low_HNV-forest-proxy-test-dataset/high_and_low_HNV-forest-proxy-polygon-test-dataset_30_m_circles_dataset_without_empty_clouds.csv")
+                        #   default="/workspace/datasets/samples.csv")
+                          default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/workspace/datasets/final_results/3D-Airborne-Lidar-Scanner-PointVector-S/2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7/2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7_E4.pth")
-    argparse.add_argument("--save_dir", type=str, help="Path to save the encodings.", 
-                          default="/workspace/datasets/final_results/2D-3D-MLP-Fusion/2024-10-17-20-12_BioVista-2D-Orthophotos_resnet18_240px_30m_circles-2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7/2024-10-22-15-27-47_BioVista-3D-ALS_pointvector-s_batch-sz_8_8192_lr_0.0001_qb-radius_0.7_train_val_encodings")
-    argparse.add_argument("--shape_size_meters", type=int, help="Shape size in meters.", default=30)
+                          default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+    argparse.add_argument("--save_dir", type=str, help="Directory to save the feature encodings.", default=None)
     argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=1)
-    argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=8192)
+    argparse.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.65)
+    argparse.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
+    argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=16384)
     argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
-    argparse.add_argument("--dataset_split", type=str, help="Dataset split to use for inference.", default="train")
+    argparse.add_argument("--dataset_split", type=str, help="Dataset split to use for inference.", default="test")
+    argparse.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyzh")
+    argparse.add_argument("--pcld_format", type=str, help="File format of the dataset.", default="npz")
+    argparse.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=False)
+    argparse.add_argument("--is_test_performance", type=str2bool, help="Whether to evaluate the model performance on the dataset set", default=False)
+    argparse.add_argument("--seed", type=int, help="Random seed", default=9447)
 
     args, opts = argparse.parse_known_args()
     cfg = EasyConfig()
     cfg.load(args.cfg, recursive=True)
     cfg.update(opts)
+
+    if args.seed is not None:
+        seed = args.seed
+    else:
+        seed = np.random.randint(1, 10000)
+
+    set_random_seed(seed, deterministic=cfg.deterministic)
 
     # Parse the source and validate it
     source = args.source    
@@ -66,6 +92,10 @@ if __name__ == "__main__":
 
     source_is_file = os.path.isfile(source)
     source_is_dir = not source_is_file
+
+    # Assert pcld_format is either npz or laz
+    assert args.pcld_format in ["npz", "laz"], f"Point cloud format {args.pcld_format} is not supported."
+    cfg.dataset.common.format = args.pcld_format
 
     if source_is_dir:
         n_laz_files = len([f for f in os.listdir(source) if f.endswith(".laz")])
@@ -87,6 +117,8 @@ if __name__ == "__main__":
     cfg.dataset.common.data_root = source
 
     # Load the model given the config file cfg.yaml
+    cfg.model.encoder_args.in_channels = len(args.channels)
+    cfg.dataset.common.channels = args.channels
     model = build_model_from_cfg(cfg.model)
     model_size = cal_model_parm_nums(model)
     print('Number of params: %.4f M' % (model_size / 1e6))
@@ -120,34 +152,56 @@ if __name__ == "__main__":
     if num_workers == 0:
         print("Warning: num_workers is set to 0. This might slow down the training process.")
 
-    val_loader = build_dataloader_from_cfg(batch_size,
+    # Set the number of points in the point cloud and the channels
+    cfg.dataset.common.num_points = args.num_points
+
+    # Set the Query ball parameters
+    cfg.model.encoder_args.radius = args.qb_radius
+    cfg.model.encoder_args.radius_scaling = args.qb_radius_scaling
+
+    if args.with_normalize_gravity_dim:
+        cfg.datatransforms.kwargs.normalize_gravity_dim = True
+    else:
+        cfg.datatransforms.kwargs.normalize_gravity_dim = False
+
+    data_loader = build_dataloader_from_cfg(batch_size,
                                            cfg.dataset,
                                            cfg.dataloader,
                                            datatransforms_cfg=cfg.datatransforms,
                                            split=dataset_split,
                                            distributed=False
                                            )
+    
+    if args.is_test_performance:
+        confusion_matrix = ConfusionMatrix(num_classes=cfg.num_classes)
+        # Init containers to store the predictions, confidences, labels and image paths
+        pred_list = []
+        conf_list = []
+        label_list = []
+        img_path_list = []
 
-    # Filter away the samples which are already processed
-    df = val_loader.dataset.df.copy()
+    # Check if some of the files in the dataset has already been processed, if so skip them
+    df = data_loader.dataset.df.copy()
     existing_files = list(os.listdir(save_dir))
     missing_files = []
     for idx, row in df.iterrows():
-        point_cloud_file_name = val_loader.dataset.file_name_from_row(row)
+        point_cloud_file_name = data_loader.dataset.file_name_from_row(row)
         # replace .laz with .npy
-        point_cloud_file_name = point_cloud_file_name.replace(".laz", ".npy")
+        point_cloud_file_name = point_cloud_file_name.replace(f".{args.pcld_format}", ".npy")
         if point_cloud_file_name not in existing_files:
             missing_files.append(row["id"])
+    
+    # Filter the dataframe to only include the point clouds which have not been processed yet
     print(f"Found {len(missing_files)} missing files in the dataset.")
     df = df[df["id"].isin(missing_files)]
-    val_loader.dataset.df = df
-            
-    print(f"Number of samples in the {dataset_split} set: ", len(val_loader.dataset))
+    data_loader.dataset.df = df
+    
+    print(f"Number of samples in the {dataset_split} set: ", len(data_loader.dataset))
     model.to(device)
     model.eval()
     torch.backends.cudnn.enabled = True
     with torch.set_grad_enabled(False):
-        pbar = tqdm(enumerate(val_loader), total=val_loader.__len__())
+        pbar = tqdm(enumerate(data_loader), total=data_loader.__len__())
         for idx, (fns, data) in pbar:
             
             for key in data.keys():
@@ -167,3 +221,38 @@ if __name__ == "__main__":
                 np.save(save_path, feature.cpu().numpy())
                 # print(f"Saved feature encodings to {save_path}")
             
+
+            if args.is_test_performance:
+                logits = model(data)
+                confusion_matrix.update(logits.argmax(dim=1), target)
+                preds = logits.argmax(dim=1)
+                pred_list.extend(preds.cpu().numpy())
+                
+                # Compute confidence scores from the softmax
+                conf = torch.nn.functional.softmax(logits, dim=1)
+                max_conf = conf.max(dim=1)[0]
+                conf_list.extend(max_conf.cpu().numpy())
+                
+                label_list.extend(target.cpu().numpy())
+                img_path_list.extend(fns)
+    
+    if args.is_test_performance:
+        # After looping through the dataset, compute overall metrics and save results
+        tp, count = confusion_matrix.tp, confusion_matrix.count
+        test_macc, test_oa, _ = confusion_matrix.cal_acc(tp, count)
+        pred_label_fp = os.path.join(os.path.dirname(save_dir), "test_prediction_labels.csv")
+        with open(pred_label_fp, "w") as f:
+            f.write("image_path,prediction,label,correct,confidence\n")
+            for img_path, pred, label, conf in zip(img_path_list, pred_list, label_list, conf_list):
+                f.write(f"{os.path.basename(img_path)},{pred},{label},{int(pred==label)},{round(conf*100,0)}\n")
+            # Write overall metrics
+            low_total = confusion_matrix.actual[0].item()
+            low_correct = confusion_matrix.tp[0].item() 
+            low_acc = (low_correct/low_total)*100 if low_total>0 else 0
+            f.write(f"Low bio correct,{low_correct},{low_total},{low_acc}\n")
+            high_total = confusion_matrix.actual[1].item()
+            high_correct = confusion_matrix.tp[1].item()
+            high_acc = (high_correct/high_total)*100 if high_total>0 else 0
+            f.write(f"High bio correct,{high_correct},{high_total},{high_acc}\n")
+            f.write(f"Overall test accuracy,{confusion_matrix.tp.sum().item()},{confusion_matrix.actual.sum().item()},{test_oa}\n")
+            f.write(f"Mean test accuracy,{test_macc}\n")
