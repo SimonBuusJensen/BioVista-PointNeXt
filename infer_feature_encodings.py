@@ -187,7 +187,7 @@ if __name__ == "__main__":
     for idx, row in df.iterrows():
         point_cloud_file_name = data_loader.dataset.file_name_from_row(row)
         # replace .laz with .npy
-        point_cloud_file_name = point_cloud_file_name.replace(f".{args.pcld}", ".npy")
+        point_cloud_file_name = point_cloud_file_name.replace(f".{args.pcld_format}", ".npy")
         if point_cloud_file_name not in existing_files:
             missing_files.append(row["id"])
     
