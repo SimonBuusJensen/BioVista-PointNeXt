@@ -61,7 +61,7 @@ if __name__ == "__main__":
                         #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
                         #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
     argparse.add_argument("--save_dir", type=str, help="Directory to save the feature encodings.", default=None)
-    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=1)
+    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=8)
     argparse.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.65)
     argparse.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=16384)
