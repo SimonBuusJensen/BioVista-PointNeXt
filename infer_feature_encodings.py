@@ -217,7 +217,7 @@ if __name__ == "__main__":
             # Save the encoding
             for fn, feature in zip(fns, features):
                 point_cloud_file_name = os.path.basename(fn)
-                save_path = os.path.join(save_dir, point_cloud_file_name.replace(f".{args.pc}", ".npy"))
+                save_path = os.path.join(save_dir, point_cloud_file_name.replace(f".{args.pcld_format}", ".npy"))
                 np.save(save_path, feature.cpu().numpy())
                 # print(f"Saved feature encodings to {save_path}")
             
