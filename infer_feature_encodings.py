@@ -37,9 +37,9 @@ if __name__ == "__main__":
     argparse.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=False)
     argparse.add_argument("--with_normalize_intensity", type=str2bool, help="Whether to normalize the intensity", default=False)
     argparse.add_argument("--normalize_intensity_scale", type=float, help="Scale to factor to the normalization of the intensity", default=1.0)
-    argparse.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=True)
-    argparse.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=True)
-    argparse.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=True)
+    argparse.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=False)
+    argparse.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
+    argparse.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
     argparse.add_argument("--seed", type=int, help="Random seed", default=1284)
     argparse.add_argument("--is_test_performance", type=str2bool, help="Whether to evaluate the model performance on the dataset set", default=True)
 
@@ -182,14 +182,14 @@ if __name__ == "__main__":
             data['pos'] = points[:, :, :3].contiguous()
             data['x'] = points[:, :, :cfg.model.in_channels].transpose(1, 2).contiguous()
 
-            # features = model.encoder.forward_cls_feat(data)
+            features = model.encoder.forward_cls_feat(data)
 
-            # # Save the encoding
-            # for fn, feature in zip(fns, features):
-            #     point_cloud_file_name = os.path.basename(fn)
-            #     save_path = os.path.join(save_dir, point_cloud_file_name.replace(f".{args.pcld_format}", ".npy"))
-            #     np.save(save_path, feature.cpu().numpy())
-            #     # print(f"Saved feature encodings to {save_path}")
+            # Save the encoding
+            for fn, feature in zip(fns, features):
+                point_cloud_file_name = os.path.basename(fn)
+                save_path = os.path.join(save_dir, point_cloud_file_name.replace(f".{args.pcld_format}", ".npy"))
+                np.save(save_path, feature.cpu().numpy())
+                # print(f"Saved feature encodings to {save_path}")
             
             if args.is_test_performance:
                 logits = model(data)
