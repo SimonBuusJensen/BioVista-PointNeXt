@@ -23,13 +23,20 @@ class BioVista(Dataset):
                  transform=None,
                  normalize_intensity=False,
                  normalize_intensity_scale=1.0,
-                 format='npz'
+                 format='npz',
+                 seed=None,
                  ):
 
         # Assert the data_root is a csv file
         assert data_root.endswith('.csv')
         csv_file = data_root
         self.df = pd.read_csv(csv_file)
+
+        if split == "test":
+            if seed is None:
+                seed = 42
+            else:
+                self.seed = seed
 
         self.num_points = num_points
         self.channels = channels
@@ -134,9 +141,7 @@ class BioVista(Dataset):
         fn = os.path.join(self.point_cloud_root, fn)
 
         try:
-
             assert os.path.exists(fn), f"Point cloud file {fn} does not exist"
-
             points = self.load_point_cloud(fn)
 
             # Remove the points which belong to class 7 (noise) or 18 (noise)
@@ -146,7 +151,6 @@ class BioVista(Dataset):
             points = points[points[:, 2] > 0]
 
             if "i" in self.channels and self.normalize_intensity:
-
                 try:
                     mode = round(row["mode"], 2)
                 except:
@@ -167,18 +171,25 @@ class BioVista(Dataset):
             center_x, center_y = (np.max(points[:, 0]) + np.min(points[:, 0])) / 2, (np.max(points[:, 1]) + np.min(points[:, 1])) / 2
             points = self.apply_circle_mask(points, self.radius, center_x, center_y)
 
+            if self.split == 'test':
+                np.random.seed(self.seed)
+            
             # Select a random subset of points given the self.num_points
             if self.num_points is not None and points.shape[0] >= self.num_points:
-                idx = np.random.choice(
-                    points.shape[0], self.num_points, replace=False)
-                points = points[idx, :]
+                indices = np.random.choice(points.shape[0], self.num_points, replace=False)
+                points = points[indices, :]
+                if idx == 0 or idx == 25 or idx == 49:
+                    print("idx: ", idx)
+                    print(indices[:10])
 
             # Fill extra points into the points cloud if the number of points is less than the required number of points
             if self.num_points is not None and points.shape[0] < self.num_points:
                 n_points_to_fill = self.num_points - points.shape[0]
-                idx = np.random.choice(
-                    points.shape[0], n_points_to_fill, replace=True)
-                points = np.concatenate([points, points[idx, :]], axis=0)
+                indices = np.random.choice(points.shape[0], n_points_to_fill, replace=True)
+                points = np.concatenate([points, points[indices, :]], axis=0)
+                if idx == 0 or idx == 25 or idx == 49:
+                    print("idx: ", idx)
+                    print(indices[:10])
 
             data = {
                 'pos': points[:, :3],

@@ -22,18 +22,18 @@ def str2bool(v):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file',
-                        # default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
-                        default="cfgs/biovista/pointvector-s.yaml")
+                        default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+                        # default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument('--dataset_csv', type=str, help='dataset csv file', 
-                        # default="/workspace/datasets/samples.csv") 
-                        default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        default="/workspace/datasets/samples.csv") 
+                        # default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=20)
     parser.add_argument("--pcl_file_format", type=str, help="Point cloud file format (npz | laz)", default="npz")
-    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=1)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
-    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=8192)
-    parser.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyzhi")
+    parser.add_argument("--num_points", type=int, help="Number of points in the point cloud", default=16384)
+    parser.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyzh")
     parser.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.65)
     parser.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weights", default=False)
@@ -43,9 +43,11 @@ if __name__ == "__main__":
     parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=True)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=True)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=True)
-    parser.add_argument("--seed", type=int, help="Random seed", default=None)
-    parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
+    parser.add_argument("--seed", type=int, help="Random seed", default=1284)
+    parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=False)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Intensity-Experiments_v1")
+    parser.add_argument("--model_weights", type=str, help="Path to the model weights", 
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
@@ -54,9 +56,9 @@ if __name__ == "__main__":
     
     # Set the seed
     if args.seed is not None:
-        cfg.seed = np.random.randint(1, 10000)
-    else:
         cfg.seed = args.seed
+    else:
+        cfg.seed = np.random.randint(1, 10000)
     
     # Set the dataset csv file
     cfg.dataset.common.data_root = args.dataset_csv
@@ -152,4 +154,5 @@ if __name__ == "__main__":
         wandb.save(cfg.cfg_path)
         wandb.save(cfg.log_dir)
 
+    cfg.best_model_weights = args.model_weights
     train(0, cfg)
