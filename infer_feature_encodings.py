@@ -15,11 +15,12 @@ if __name__ == "__main__":
     # Parse arguments
     argparse = argparse.ArgumentParser(description="Generate feature encodings for 3D Point clouds using a trained Point Vector Model")
     argparse.add_argument('--cfg', type=str, help='config file', 
-                          default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
-                        #   default="cfgs/biovista/pointvector-s.yaml")
+                        #   default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+                          default="cfgs/biovista/pointvector-s.yaml")
     argparse.add_argument("--dataset_csv", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                          default="/workspace/datasets/samples.csv")
+                        #   default="/workspace/datasets/samples.csv")
                         #   default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                          default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
                         #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
                           default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
@@ -27,7 +28,7 @@ if __name__ == "__main__":
                         #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
     argparse.add_argument("--pcld_format", type=str, help="File format of the dataset.", default="npz")
     argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=1)
-    argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=0)
+    argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
     argparse.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyzh")
     argparse.add_argument("--save_dir", type=str, help="Directory to save the feature encodings.", default=None)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=16384)
