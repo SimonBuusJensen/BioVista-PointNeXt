@@ -15,26 +15,25 @@ if __name__ == "__main__":
     # Parse arguments
     argparse = argparse.ArgumentParser(description="Generate feature encodings for 3D Point clouds using a trained Point Vector Model")
     argparse.add_argument('--cfg', type=str, help='config file', 
-                        #   default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
-                          default="cfgs/biovista/pointvector-s.yaml")
+                          default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+                        #   default="cfgs/biovista/pointvector-s.yaml")
     argparse.add_argument("--dataset_csv", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                        #   default="/workspace/datasets/samples.csv")
+                          default="/workspace/datasets/samples.csv")
                         #   default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
-                          default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
+                        #   default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
     argparse.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-                          default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-pointc-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-    argparse.add_argument("--pcld_format", type=str, help="File format of the dataset.", default="npz")
-    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=4)
-    argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=4)
+                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        #   default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-12-42-43_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                          default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+    argparse.add_argument("--batch_size", type=int, help="Batch size for the dataloader.", default=1)
+    argparse.add_argument("--num_workers", type=int, help="Number of workers for the dataloader.", default=2)
     argparse.add_argument("--channels", type=str, help="Channels to use, x, y, z, h (height) and/or i (intensity)", default="xyzh")
     argparse.add_argument("--save_dir", type=str, help="Directory to save the feature encodings.", default=None)
     argparse.add_argument("--num_points", type=int, help="Number of points to sample from the point cloud.", default=16384)
     argparse.add_argument("--qb_radius", type=float, help="Query ball radius", default=0.65)
     argparse.add_argument("--qb_radius_scaling", type=float, help="Radius scaling factor", default=1.5)
-    argparse.add_argument("--dataset_split", type=str, help="Dataset split to use for inference.", default="test")
+    argparse.add_argument("--dataset_split", type=str, help="Dataset split to use for inference.", default="train")
     argparse.add_argument("--with_normalize_gravity_dim", type=str2bool, help="Whether to normalize the gravity dimension", default=False)
     argparse.add_argument("--with_normalize_intensity", type=str2bool, help="Whether to normalize the intensity", default=False)
     argparse.add_argument("--normalize_intensity_scale", type=float, help="Scale to factor to the normalization of the intensity", default=1.0)
@@ -42,7 +41,7 @@ if __name__ == "__main__":
     argparse.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     argparse.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
     argparse.add_argument("--seed", type=int, help="Random seed", default=1284)
-    argparse.add_argument("--is_test_performance", type=str2bool, help="Whether to evaluate the model performance on the dataset set", default=True)
+    argparse.add_argument("--is_test_performance", type=str2bool, help="Whether to evaluate the model performance on the dataset set", default=False)
 
     # Parse the arguments
     args, opts = argparse.parse_known_args()
@@ -65,9 +64,7 @@ if __name__ == "__main__":
     assert len(df) > 0, "The csv file is empty."
 
     # Set the point cloud file format
-    # Assert pcld_format is either npz or laz
-    assert args.pcld_format in ["npz", "laz"], f"Point cloud format {args.pcld_format} is not supported."
-    cfg.dataset.common.format = args.pcld_format
+    cfg.dataset.common.format = "npz"
 
     # Set the batch size and number of workers
     cfg.dataloader.num_workers = args.num_workers # TODO check if this is correct
@@ -107,6 +104,17 @@ if __name__ == "__main__":
     set_random_seed(cfg.seed, deterministic=cfg.deterministic)
     torch.backends.cudnn.enabled = True
 
+    # Set the model weights
+    model_weights = args.model_weights
+    assert os.path.exists(model_weights), f"Model weights file {model_weights} does not exist."
+
+    # Set the save directory
+    save_dir = args.save_dir
+    if save_dir is None:
+        save_dir = os.path.join(os.path.dirname(os.path.dirname(model_weights)), "pointvector_encodings")
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
     # Get the dataset split
     dataset_split = args.dataset_split
     assert dataset_split in ["train", "val", "test"], "dataset_split must be one of ['train', 'test']"
@@ -114,10 +122,6 @@ if __name__ == "__main__":
 
     # Get rows with dataset_split == "test"
     df = df[df["dataset_split"] == dataset_split]
-    print("-------------------------------------------------------------------")
-    # Sample 500 samples from the test set
-    print("WARNING! only using the test samples in the csv file for inference.")
-    print("-------------------------------------------------------------------")
     print(f"Found {len(df)} image paths in the csv file.")
 
     # Set the dataset and data loader
@@ -135,31 +139,33 @@ if __name__ == "__main__":
                                            cfg.dataset,
                                            cfg.dataloader,
                                            datatransforms_cfg=cfg.datatransforms,
-                                           split=dataset_split,
+                                           split=dataset_split
                                            )
-    # Sample 50 samples from the test set randomly
-    # data_loader.dataset.df = data_loader.dataset.df.sample(50, random_state=cfg.seed) 
+    # Filter away the samples which are already processed
+    if not args.is_test_performance:
+        df = data_loader.dataset.df.copy()
+        existing_files = list(os.listdir(save_dir))
+        missing_files = []
+        for idx, row in df.iterrows():
+            point_cloud_file_name = data_loader.dataset.file_name_from_row(row)
+            point_cloud_file_name = point_cloud_file_name.replace(".npz", ".npy")
+            if point_cloud_file_name not in existing_files:
+                missing_files.append(row["id"])
+        
+        print(f"Found {len(missing_files)} missing files in the dataset.")
+        df = df[df["id"].isin(missing_files)]
+        
+        data_loader.dataset.df = df
 
     model = build_model_from_cfg(cfg.model).to(cfg.rank)
     cfg.model.in_channels = cfg.model.encoder_args.in_channels
     model_size = cal_model_parm_nums(model)
     print('Number of params: %.4f M' % (model_size / 1e6))
 
-    # Load the model weights
-    model_weights = args.model_weights
-    assert os.path.exists(model_weights), f"Model weights file {model_weights} does not exist."
-
     # test mode
     print("Loading model weights from: " + model_weights + "...")
     epoch, best_val = load_checkpoint(model, pretrained_path=model_weights)
     # Set model to gpu if available
-
-    # Set the save directory
-    save_dir = args.save_dir
-    if save_dir is None:
-        save_dir = os.path.join(os.path.dirname(os.path.dirname(model_weights)), "pointvector_encodings")
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
  
     print(f"Number of samples in the {dataset_split} set: ", len(data_loader.dataset))
     model.eval()
@@ -185,12 +191,11 @@ if __name__ == "__main__":
 
             features = model.encoder.forward_cls_feat(data)
 
-            # Save the encoding
+            # Save the encodings
             for fn, feature in zip(fns, features):
                 point_cloud_file_name = os.path.basename(fn)
-                save_path = os.path.join(save_dir, point_cloud_file_name.replace(f".{args.pcld_format}", ".npy"))
+                save_path = os.path.join(save_dir, point_cloud_file_name.replace(".npz", ".npy"))
                 np.save(save_path, feature.cpu().numpy())
-                # print(f"Saved feature encodings to {save_path}")
             
             if args.is_test_performance:
                 logits = model(data)
