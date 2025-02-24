@@ -79,7 +79,7 @@ def main(gpu, cfg):
                                              split='train'
                                              )
     # DEBUG: Sample 5000 random samples. Change the train_loader.dataset.df to a subset of the original dataset
-    # train_loader.dataset.df = train_loader.dataset.df.sample(3000) # TODO: Remove this line
+    # train_loader.dataset.df = train_loader.dataset.df.sample(500) # TODO: Remove this line
 
     logging.info(f"length of training dataset: {len(train_loader.dataset)}")
     cfg.dataset.val.num_points = cfg.num_points
@@ -90,7 +90,7 @@ def main(gpu, cfg):
                                            split=cfg.dataset.val.split
                                            )
     # DEBUG: Sample 500 random samples. Change the val_loader.dataset.df to a subset of the original dataset
-    # val_loader.dataset.df = val_loader.dataset.df.sample(500) # TODO: Remove this line
+    # val_loader.dataset.df = val_loader.dataset.df.sample(100) # TODO: Remove this line
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")  
     cfg.dataset.test.num_points = cfg.num_points
     cfg.dataset.test.seed = cfg.seed
@@ -106,13 +106,13 @@ def main(gpu, cfg):
     logging.info(f"length of testing dataset: {len(test_loader.dataset)}")
 
     # Setup model
-    # if not cfg.model.get('criterion_args', False):
-    #     cfg.model.criterion_args = cfg.criterion_args
+    if not cfg.model.get('criterion_args', False):
+        cfg.model.criterion_args = cfg.criterion_args
         
-    # if cfg.cls_weighed_loss:
-    #     cfg.model.criterion_args.weight = calculate_class_weights(train_loader.dataset.df['class_id'].values)
-    #     logging.info('Using class weighted loss')
-    #     logging.info(f"Weight: {cfg.model.criterion_args.weight}")
+    if cfg.cls_weighed_loss:
+        cfg.model.criterion_args.weight = calculate_class_weights(train_loader.dataset.df['class_id'].values)
+        logging.info('Using class weighted loss')
+        logging.info(f"Weight: {cfg.model.criterion_args.weight}")
         
     model = build_model_from_cfg(cfg.model).to(cfg.rank)
     model_size = cal_model_parm_nums(model)
@@ -277,8 +277,7 @@ def main(gpu, cfg):
     """
     TESTING
     """
-    # best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
-    best_epoch, _ = load_checkpoint(model, pretrained_path=cfg.best_model_weights)
+    best_epoch, _ = load_checkpoint(model, pretrained_path=os.path.join(cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
     
     model.eval()
     torch.backends.cudnn.enabled = True

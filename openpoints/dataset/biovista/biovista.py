@@ -178,18 +178,18 @@ class BioVista(Dataset):
             if self.num_points is not None and points.shape[0] >= self.num_points:
                 indices = np.random.choice(points.shape[0], self.num_points, replace=False)
                 points = points[indices, :]
-                if idx == 0 or idx == 25 or idx == 49:
-                    print("idx: ", idx)
-                    print(indices[:10])
+                # if idx == 0 or idx == 25 or idx == 49:
+                #     print("idx: ", idx)
+                #     print(indices[:10])
 
             # Fill extra points into the points cloud if the number of points is less than the required number of points
             if self.num_points is not None and points.shape[0] < self.num_points:
                 n_points_to_fill = self.num_points - points.shape[0]
                 indices = np.random.choice(points.shape[0], n_points_to_fill, replace=True)
                 points = np.concatenate([points, points[indices, :]], axis=0)
-                if idx == 0 or idx == 25 or idx == 49:
-                    print("idx: ", idx)
-                    print(indices[:10])
+                # if idx == 0 or idx == 25 or idx == 49:
+                #     print("idx: ", idx)
+                #     print(indices[:10])
 
             data = {
                 'pos': points[:, :3],
