@@ -5,7 +5,6 @@ import wandb
 import numpy as np
 from datetime import datetime
 from examples.classification.train import main as train
-from examples.classification.pretrain import main as pretrain
 from openpoints.utils import EasyConfig, dist_utils, generate_exp_directory, resume_exp_directory
 
 def str2bool(v):

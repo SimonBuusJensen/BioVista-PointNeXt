@@ -1,19 +1,15 @@
 import os, logging, csv, numpy as np, wandb
+import torch
 from tqdm import tqdm
 from collections import Counter
-import torch, torch.nn as nn
 from torch import distributed as dist
-from torch.utils.tensorboard import SummaryWriter
-from openpoints.utils import set_random_seed, save_checkpoint, load_checkpoint, load_checkpoint_inv, resume_checkpoint, setup_logger_dist, \
-    cal_model_parm_nums, Wandb
-from openpoints.utils import AverageMeter, ConfusionMatrix, get_mious
+from openpoints.utils import set_random_seed, save_checkpoint, load_checkpoint, setup_logger_dist, \
+    cal_model_parm_nums
+from openpoints.utils import AverageMeter, ConfusionMatrix
 from openpoints.dataset import build_dataloader_from_cfg
-from openpoints.transforms import build_transforms_from_cfg
 from openpoints.optim import build_optimizer_from_cfg
 from openpoints.scheduler import build_scheduler_from_cfg
-from openpoints.loss import build_criterion_from_cfg
 from openpoints.models import build_model_from_cfg
-from openpoints.models.layers import furthest_point_sample, fps
 
 
 def get_features_by_keys(input_features_dim, data):
