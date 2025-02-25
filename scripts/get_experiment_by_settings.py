@@ -40,9 +40,9 @@ filtered_df = df[
     (df['qb_radius'] == 0.65) &
     (df['qb_radius_scaling'] == 1.5) &
     (df['with_class_weights'] == False) &
-    (df['with_point_cloud_jitter'] == False) &
-    (df['with_point_cloud_rotations'] == False) &
-    (df['with_point_cloud_scaling'] == False) &
+    (df['with_point_cloud_jitter'] == True) &
+    (df['with_point_cloud_rotations'] == True) &
+    (df['with_point_cloud_scaling'] == True) &
     (df['with_normalize_gravity_dim'] == False) &
     # (df['with_normalize_intensity'] == True) &
     # (df['normalize_intensity_scale'] == 1) &
