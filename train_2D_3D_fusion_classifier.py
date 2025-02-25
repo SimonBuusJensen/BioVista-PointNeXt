@@ -1,8 +1,10 @@
 import argparse
 import os
+import wandb
 
 import numpy as np
 
+from datetime import datetime
 from openpoints.utils import EasyConfig, set_random_seed
 from train_classifier import str2bool
 from fusion_classifier.MLPModel import MLPModel
@@ -33,14 +35,15 @@ if __name__ == "__main__":
     
 
     # General Settings:
-    parser.add_argument("--is_active_weights", type=str2bool, help="Whether to freeze the weights of the PointVector and ResNet models", default=False)
-    parser.add_argument("--mode", type=str, help="Mode (train or test)", default="train")
-    parser.add_argument("--seed", type=int, help="Random seed", default=None)
-    parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-MLP-Fusion-2D-3D-Active-Weights-Test-Version")
+    parser.add_argument("--mode", type=str, help="Mode (train or test)", default="train")
+    parser.add_argument("--is_active_weights", type=str2bool, help="Whether to freeze the weights of the PointVector and ResNet models", default=False)
+    parser.add_argument("--seed", type=int, help="Random seed", default=None)
+    parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
+    assert os.path.exists(args.pointvector_cfg), "The PointVector config file does not exist."
     cfg.load(args.pointvector_cfg, recursive=True)
     cfg.update(opts)
 
@@ -64,6 +67,7 @@ if __name__ == "__main__":
 
     # Set with or without active learning (is_active_weights)
     cfg.is_active_weights = args.is_active_weights
+    assert isinstance(cfg.is_active_weights, bool), "The is_active_weights must be a boolean."
 
     # Assert the features_dir_2d and features_dir_3d exists and are none empty directories in is_active_weights is False
     if not cfg.is_active_weights:
@@ -72,6 +76,21 @@ if __name__ == "__main__":
         assert os.path.exists(args.features_dir_3d), "The 3D features directory does not exist."
         assert len(os.listdir(args.features_dir_2d)) == 44378, "The 2D features does not contain 44378 files."
         assert len(os.listdir(args.features_dir_3d)) == 44378, "The 3D features does not contain 44378 files."
+
+    # Setup project name and experiment name
+    assert args.project_name is not None
+    assert isinstance(args.project_name, str), "The project_name must be a string."
+    cfg.project_name = args.project_name
+    date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    experiment_name = f"{date_now_str}-{cfg.project_name}"
+
+    # Setup wandb
+    assert isinstance(args.use_wandb, bool), "The use_wandb must be a boolean."
+    if args.use_wandb:
+        cfg.wandb.use_wandb = True
+        cfg.wandb.project = cfg.project_name
+        wandb.init(project=cfg.wandb.project, name=experiment_name)
+        wandb.config.update(args)
 
     # Init the MLP model
     MLPModel()
