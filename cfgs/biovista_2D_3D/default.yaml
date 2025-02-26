@@ -1,7 +1,7 @@
 # data augmentation
 dataset:
   common:
-    NAME: BioVista # Name of the dataset see openpoint/datasets/ for list of available datasets. Should match with the class name in the dataset module.
+    NAME: BioVista2D3D # Name of the dataset see openpoint/datasets/ for list of available datasets. Should match with the class name in the dataset module.
     data_root: /workspace/datasets/test_3D_point_cloud_pipeline/100_high_and_100_low_HNV-forest-proxy-samples_30_m_circles_dataset.csv
   train:
     split: train
@@ -35,7 +35,7 @@ datatransforms:
 # ---------------------------------------------------------------------------- #
 val_fn: validate
 ignore_index: null 
-epochs: 20
+# epochs: 20
 
 cls_weighed_loss: False
 
