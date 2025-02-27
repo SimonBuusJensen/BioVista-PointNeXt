@@ -49,13 +49,15 @@ if __name__ == "__main__":
                         # default="cfgs/biovista_2D_3D/pointvector-s.yaml")
                         default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
     parser.add_argument("--features_dir_2d", type=str, help="Path to a directory containing the 2D features of the images.",
-                        default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/resnet_encodings")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings/")
+                        # default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings/")
     parser.add_argument("--pointvector_model_weights", type=str, help="Path to the model weights file.",
                         default="")
 
     # ResNet Settings:
     parser.add_argument("--features_dir_3d", type=str, help="Path to a directory containing the 3D features of the point clouds.",
-                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-04-00-36-38_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings/")
+                        # default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings/")
     parser.add_argument("--resnet_model_weights", type=str, help="Path to the model weights file.",
                         default="")
 
@@ -66,7 +68,7 @@ if __name__ == "__main__":
 
     # General Project Settings:
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-MLP-Fusion-2D-3D-Active-Weights-Test-Version")
-    parser.add_argument("--mode", type=str, help="Mode (train or test)", default="train")
+    parser.add_argument("--mode", type=str, help="Mode (train or test)", default="test")
     parser.add_argument("--is_active_weights", type=str2bool, help="Whether to freeze the weights of the PointVector and ResNet models", default=False)
     parser.add_argument("--seed", type=int, help="Random seed", default=None)
     parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
@@ -122,7 +124,7 @@ if __name__ == "__main__":
     
     # Setup wandb
     assert isinstance(args.use_wandb, bool), "The use_wandb must be a boolean."
-    if args.use_wandb:
+    if args.use_wandb and cfg.mode == "train":
         cfg.wandb.use_wandb = True
         cfg.wandb.project = cfg.project_name
         wandb.init(project=cfg.wandb.project, name=experiment_name)
@@ -135,7 +137,10 @@ if __name__ == "__main__":
 
     # Setup dataloaders
     if cfg.mode == "test":
-        test_dataset = FeatureDataset(csv_file, cfg.dataset, dataset_split="test")
+        test_dataset = FeatureDataset(csv_file, 
+                                      feature_dir_2d=args.features_dir_2d,
+                                      feature_dir_3d=args.features_dir_3d,
+                                      data_split="test")
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=cfg.num_workers)
         logging.info(f"Test dataset: {len(test_dataset)} samples.")
     else: # mode: train
@@ -193,32 +198,43 @@ if __name__ == "__main__":
             model.eval()
             model.to(device)
 
+            overall_accuracy_test = 0
+            high_correct = 0
+            low_correct = 0
+            n_high_bio_samples = 0
+            n_low_bio_samples = 0
+
+            pred_list = []
+            label_list = []
+            file_name_list = []
+            conf_list = []
+
             with torch.no_grad():
                 for fn, X_test_batch, y_test_batch in tqdm(test_loader, desc="Evaluating on test set"):
 
-                # Move tensors to the same device
-                X_test_batch = X_test_batch.to(device)
-                y_test_batch = y_test_batch.to(device)
+                    # Move tensors to the same device
+                    X_test_batch = X_test_batch.to(device)
+                    y_test_batch = y_test_batch.to(device)
 
-                outputs = model(X_test_batch)
-                confidences = torch.nn.functional.softmax(outputs, dim=1)
-                confidences = torch.max(confidences, 1)[0]
+                    outputs = model(X_test_batch)
+                    confidences = torch.nn.functional.softmax(outputs, dim=1)
+                    confidences = torch.max(confidences, 1)[0]
 
-                _, preds = torch.max(outputs, 1)
-                labels = torch.max(y_test_batch, 1)[1]
-                overall_accuracy_test += torch.sum(preds == labels).item()
+                    _, preds = torch.max(outputs, 1)
+                    labels = torch.max(y_test_batch, 1)[1]
+                    overall_accuracy_test += torch.sum(preds == labels).item()
 
-                high_correct += torch.sum((preds == labels) & (labels == 1))
-                low_correct += torch.sum((preds == labels) & (labels == 0))
+                    high_correct += torch.sum((preds == labels) & (labels == 1))
+                    low_correct += torch.sum((preds == labels) & (labels == 0))
 
-                n_high_bio_samples += torch.sum(labels == 1)
-                n_low_bio_samples += torch.sum(labels == 0)
+                    n_high_bio_samples += torch.sum(labels == 1)
+                    n_low_bio_samples += torch.sum(labels == 0)
 
-                # Append results
-                pred_list.extend(preds.cpu().numpy())
-                label_list.extend(labels.cpu().numpy())
-                img_path_list.extend(fn)
-                conf_list.extend(confidences.cpu().detach().numpy())
+                    # Append results
+                    pred_list.extend(preds.cpu().numpy())
+                    label_list.extend(labels.cpu().numpy())
+                    file_name_list.extend(fn)
+                    conf_list.extend(confidences.cpu().detach().numpy())
 
         overall_accuracy_test = overall_accuracy_test / len(test_dataset) * 100
 
@@ -234,10 +250,10 @@ if __name__ == "__main__":
             overall_val_acc_low = round(
                 low_correct.item() / n_low_bio_samples.item() * 100, 2)
 
-        results_file = os.path.join(experiment_dir, "test_results.csv")
+        results_file = os.path.join(cfg.experiment_dir, "test_results.csv")
         with open(results_file, "w") as f:
-            f.write("image_path,prediction,label,correct,confidence\n")
-            for img_path, pred, label, conf in zip(img_path_list, pred_list, label_list, conf_list):
+            f.write("file_name,prediction,label,correct,confidence\n")
+            for img_path, pred, label, conf in zip(file_name_list, pred_list, label_list, conf_list):
                 f.write(f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf * 100, 0)}\n")
 
             # Write overall high, low and total accuracy
@@ -256,4 +272,5 @@ if __name__ == "__main__":
                 "high_bio_acc_test": overall_val_acc_high,
                 "low_bio_acc_test": overall_val_acc_low
             })
+
 
