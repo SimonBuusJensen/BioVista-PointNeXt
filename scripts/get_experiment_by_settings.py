@@ -40,9 +40,9 @@ filtered_df = df[
     (df['qb_radius'] == 0.65) &
     (df['qb_radius_scaling'] == 1.5) &
     (df['with_class_weights'] == False) &
-    (df['with_point_cloud_jitter'] == True) &
-    (df['with_point_cloud_rotations'] == True) &
-    (df['with_point_cloud_scaling'] == True) &
+    (df['with_point_cloud_jitter'] == False) &
+    (df['with_point_cloud_rotations'] == False) &
+    (df['with_point_cloud_scaling'] == False) &
     (df['with_normalize_gravity_dim'] == False) &
     # (df['with_normalize_intensity'] == True) &
     # (df['normalize_intensity_scale'] == 1) &
@@ -58,25 +58,32 @@ print(filtered_df)
 
 # Print the min, max, mean and std of the test_oacc
 print("Test OACC")
-print(round(filtered_df['test_oa'].mean(), 2))
-print(round(filtered_df['test_oa'].std(), 2))
-print(round(filtered_df['test_oa'].min(), 2))
-print(round(filtered_df['test_oa'].max(), 2))
+print(round(filtered_df['test_oa'].mean(), 1))
+print(round(filtered_df['test_oa'].std(), 1))
+# print(round(filtered_df['test_oa'].min(), 1))
+# print(round(filtered_df['test_oa'].max(), 1))
 
 print("Test Acc High")
-print(round(filtered_df['test_accuracy_high'].mean(), 2))
-print(round(filtered_df['test_accuracy_high'].std(), 2))
-print(round(filtered_df['test_accuracy_high'].min(), 2))
-print(round(filtered_df['test_accuracy_high'].max(), 2))
+print(round(filtered_df['test_accuracy_high'].mean(), 1))
+print(round(filtered_df['test_accuracy_high'].std(), 1))
+# print(round(filtered_df['test_accuracy_high'].min(), 1))
+# print(round(filtered_df['test_accuracy_high'].max(), 1))
 
 print("Test Acc Low")
-print(round(filtered_df['test_accuracy_low'].mean(), 2))
-print(round(filtered_df['test_accuracy_low'].std(), 2))
-print(round(filtered_df['test_accuracy_low'].min(), 2))
-print(round(filtered_df['test_accuracy_low'].max(), 2))
+print(round(filtered_df['test_accuracy_low'].mean(), 1))
+print(round(filtered_df['test_accuracy_low'].std(), 1))
+# print(round(filtered_df['test_accuracy_low'].min(), 1))
+# print(round(filtered_df['test_accuracy_low'].max(), 1))
 
 print("Test MAcc")
-print(round(filtered_df['test_macc'].mean(), 2))
-print(round(filtered_df['test_macc'].std(), 2))
-print(round(filtered_df['test_macc'].min(), 2))
-print(round(filtered_df['test_macc'].max(), 2))
+print(round(filtered_df['test_macc'].mean(), 1))
+print(round(filtered_df['test_macc'].std(), 1))
+# print(round(filtered_df['test_macc'].min(), 1))
+# print(round(filtered_df['test_macc'].max(), 1))
+
+print("Val OAcc")
+print(round(filtered_df['best_val_oacc'].mean(), 1))
+print(round(filtered_df['best_val_oacc'].std(), 1))
+# print(round(filtered_df['best_val_oacc'].min(), 1))
+# print(round(filtered_df['best_val_oacc'].max(), 1))
+
