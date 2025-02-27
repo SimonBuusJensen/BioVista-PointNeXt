@@ -51,7 +51,7 @@ class BioVista2D3D(Dataset):
         # Make sure test is deterministic with seed
         if split == "test":
             if seed is None:
-                seed = 42
+                self.seed = 42
             else:
                 self.seed = seed
 
