@@ -25,7 +25,8 @@ if __name__ == "__main__":
                         default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument('--dataset_csv', type=str, help='dataset csv file', 
                         # default="/workspace/datasets/samples.csv") 
-                        default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        # default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=2)
     parser.add_argument("--pcl_file_format", type=str, help="Point cloud file format (npz | laz)", default="npz")
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
@@ -43,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
     parser.add_argument("--seed", type=int, help="Random seed", default=None)
-    parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
+    parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=False)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Baseline-with-Best-Settings")
 
     args, opts = parser.parse_known_args()
