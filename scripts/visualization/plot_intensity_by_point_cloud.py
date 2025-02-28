@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Process and plot point cloud intensity distributions.")
     parser.add_argument("--file_path", type=str,
-                        default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/low_biodiversity_forest_2023_ogc_fid_2_39_30m.npz",
+                        default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/ALS_point_clouds_npz/high_biodiversity_forest_2022_ogc_fid_2_46_30m.npz",
                         help="Path to point cloud file.")
     parser.add_argument("--format", type=str, choices=["npz", "laz"], default="npz",
                         help="Point cloud file format (default: npz).")
