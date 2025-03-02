@@ -628,6 +628,8 @@ class PointVectorEncoder(nn.Module):
             f0 = p0.clone().transpose(1, 2).contiguous()
         for i in range(0, len(self.encoder)):
             p0, f0 = self.encoder[i]([p0, f0])
+            # print first 10 elements of p0 and f0
+            print(f"{i}: p0: {p0[0, :2, 0]}, f0: {f0[0, 0, :2]}")
         return f0.squeeze(-1)
 
     def forward_seg_feat(self, p0, f0=None):

@@ -43,9 +43,11 @@ if __name__ == "__main__":
     parser.add_argument("--with_point_cloud_scaling", type=str2bool, help="Whether to use point cloud scaling data augmentation", default=False)
     parser.add_argument("--with_point_cloud_rotations", type=str2bool, help="Whether to use point cloud rotation data augmentation", default=False)
     parser.add_argument("--with_point_cloud_jitter", type=str2bool, help="Whether to use point cloud jitter data augmentation", default=False)
-    parser.add_argument("--seed", type=int, help="Random seed", default=None)
+    parser.add_argument("--seed", type=int, help="Random seed", default=42)
     parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=False)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Baseline-with-Best-Settings")
+    parser.add_argument("--model_weights", type=str, help="Path to the model weights file.",
+                          default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
@@ -152,4 +154,5 @@ if __name__ == "__main__":
         wandb.save(cfg.cfg_path)
         wandb.save(cfg.log_dir)
 
+    cfg.model_weights = args.model_weights
     train(0, cfg)

@@ -1,16 +1,16 @@
 import argparse
 import torch
 import os
-from tqdm import tqdm
-from openpoints.utils import EasyConfig, cal_model_parm_nums
-from openpoints.models import build_model_from_cfg
-from openpoints.models.backbone.pointvector import PointVectorEncoder
-from openpoints.models.classification.cls_base import ClsHead
-from openpoints.dataset import build_dataloader_from_cfg, BioVista2D3D
-import torch
-from torchvision.models import resnet18
+import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torchvision.models import resnet18
+from tqdm import tqdm
+
+from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed
+from openpoints.models.backbone.pointvector import PointVectorEncoder
+from openpoints.models.classification.cls_base import ClsHead
+from openpoints.dataset import BioVista2D3D
 
 
 class ResNetClassifier(nn.Module):
@@ -97,7 +97,8 @@ class MultiModalFusionModel(nn.Module):
 
         # Instantiate point cloud backbone.
         # Use the same configuration you use for PointVector-S. Adjust parameters as needed.
-        self.point_backbone_encoder = PointVectorEncoder(
+        self.point_backbone = nn.Module()
+        self.point_backbone.encoder = PointVectorEncoder(
             in_channels=4,
             width=32,
             blocks=[1, 1, 1, 1, 1, 1],
@@ -116,12 +117,12 @@ class MultiModalFusionModel(nn.Module):
             norm_args={'norm': 'bn'}
         )
 
-        self.point_backbone_cls_head = ClsHead(num_classes=num_classes,
+        self.point_backbone.prediction = ClsHead(num_classes=num_classes,
                                                in_channels=512,
                                                mlps=[512, 256],
                                                norm_args={'norm': 'bn1d'},
                                                )
-
+        
         # Fusion head: expects concatenated features.
         # For example, if both backbones output 512-d features, then 512 + 512 = 1024.
         self.fusion_head = MLPModel(input_size=fusion_input_size,
@@ -152,7 +153,7 @@ class MultiModalFusionModel(nn.Module):
 
     def forward_3D_feature_encodings(self, point_cloud):
         # Extract Features from the 3D point cloud using the PointVector-S backbone.
-        point_features = self.point_backbone_encoder.forward_cls_feat(
+        point_features = self.point_backbone.encoder.forward_cls_feat(
             point_cloud)
         return point_features
 
@@ -161,11 +162,10 @@ class MultiModalFusionModel(nn.Module):
         prediction = self.image_backbone(image)
         return prediction
 
-    def forward_3D_predictions(self, point_cloud):
+    def forward_3D_predictions(self, point_cloud_data):
         # Extract Features from the 3D point cloud using the PointVector-S backbone.
-        point_features = self.point_backbone_encoder.forward_cls_feat(
-            point_cloud)
-        prediction = self.point_backbone_cls_head(point_features)
+        point_features = self.point_backbone.encoder.forward_cls_feat(point_cloud_data)
+        prediction = self.point_backbone.prediction(point_features)
         return prediction
 
     def load_weights(self,
@@ -186,8 +186,7 @@ class MultiModalFusionModel(nn.Module):
         """
         if multimodal_weights_path:
             # Load a full model checkpoint
-            state_dict = torch.load(
-                multimodal_weights_path, map_location=map_location)
+            state_dict = torch.load(multimodal_weights_path, map_location=map_location)
             self.load_state_dict(state_dict, strict=False)
             print("Loaded full MultiModalFusionModel weights.")
             return
@@ -201,16 +200,33 @@ class MultiModalFusionModel(nn.Module):
             print("Loaded ResNet weights.")
         
         if pointvector_weights_path:
-            state_dict = torch.load(
-                pointvector_weights_path, map_location=map_location)
-            # Optionally adjust keys if necessary.
-            # Directly load the weights into the PointVector-S model of the point cloud backbone.
-            self.point_backbone_encoder.load_state_dict(state_dict)
-            self.point_backbone_cls_head.load_state_dict(state_dict)
+            # state_dict = torch.load(
+            #     pointvector_weights_path, map_location=map_location)
+            # # Optionally adjust keys if necessary.
+            # # Directly load the weights into the PointVector-S model of the point cloud backbone.
+            # state_dict = state_dict['model']
+            # self.point_backbone.load_state_dict(state_dict)
+            
+            load_checkpoint(self.point_backbone, pointvector_weights_path)
             print("Loaded PointVector-S weights.")
 
         return
 
+
+def load_checkpoint(model, pretrained_path):
+    if not os.path.exists(pretrained_path):
+        raise NotImplementedError('no checkpoint file from path %s...' % pretrained_path)
+    # load state dict
+    state_dict = torch.load(pretrained_path, map_location='cpu')
+
+    # parameter resume of base model
+    ckpt_state_dict = state_dict['model']
+    base_ckpt = {k.replace("module.", ""): v for k, v in ckpt_state_dict.items()}
+  
+    model.load_state_dict(base_ckpt)
+    epoch = state_dict.get('epoch', -1)
+    
+    return epoch
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
@@ -222,13 +238,25 @@ if __name__ == "__main__":
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
                         default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth")
 
+    parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
+                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
     
+    parser.add_argument('--seed', type=int, help='Random seed', default=42)
     
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
     cfg.load(args.cfg, recursive=True)
     cfg.update(opts)
-
+    
+    # Set the seed
+    if args.seed is not None:
+        cfg.seed = args.seed
+    else:
+        cfg.seed = np.random.randint(1, 10000)
+        
+    set_random_seed(cfg.seed, deterministic=cfg.deterministic)
+    torch.backends.cudnn.enabled = True    
+        
     cfg.model.encoder_args.in_channels = 4  # xyzh
     cfg.model.encoder_args.radius = 0.65
     cfg.model.encoder_args.radius_scaling = 1.5
@@ -244,18 +272,22 @@ if __name__ == "__main__":
     # Test if we can load ResNet model weights
     # resnet_model_weights = "/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth"
     resnet_model_weights = args.resnet_weights
-    output_dir = os.path.dirname(resnet_model_weights)
-    model.load_weights(
-        resnet_weights_path=resnet_model_weights, map_location=device)
+    pointvector_weights = args.pointvector_weights
+    assert os.path.exists(resnet_model_weights), "ResNet model weights not found."
+    assert os.path.exists(pointvector_weights), "PointVector-S model weights not found."
+    
+    
+    output_dir = os.path.dirname(pointvector_weights)
+    model.load_weights(resnet_weights_path=None, pointvector_weights_path=pointvector_weights, map_location=device)
     model.to(device)
 
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
     transform = Compose([PointsToTensor(), PointCloudXYZAlign()])
-    test_dataset = BioVista2D3D(
-        data_root=args.source, split='test', transform=transform)
-    test_loader = DataLoader(test_dataset, batch_size=1,
-                             shuffle=False, num_workers=4)
+    test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
+    test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
+    
     print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
     test_acc = 0.0
@@ -269,7 +301,6 @@ if __name__ == "__main__":
     file_path_list = []
 
     model.eval()
-    torch.backends.cudnn.enabled = True
     with torch.set_grad_enabled(False):
         for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__()):
 
@@ -278,13 +309,15 @@ if __name__ == "__main__":
 
             image = data['img'].to(device)
             points = data['x'].to(device)
-
             labels = data['y'].to(device)
+            
             data['pos'] = points[:, :, :3].contiguous()
             data['x'] = points[:, :, :4].transpose(1, 2).contiguous()
 
             # Forward pass
-            outputs = model.forward_2D_predictions(image)
+            # outputs = model.forward_2D_predictions(image)
+            outputs = model.forward_3D_predictions(data)
+            
 
             _, preds = torch.max(outputs, 1)
             # Calculate the confidence scores between 0-100% for the predictions
@@ -293,10 +326,8 @@ if __name__ == "__main__":
 
             test_acc += torch.sum(preds == labels.data)
 
-            high_correct += torch.sum((preds ==
-                                       labels.data) & (labels == 1))
-            low_correct += torch.sum((preds ==
-                                      labels.data) & (labels == 0))
+            high_correct += torch.sum((preds == labels.data) & (labels == 1))
+            low_correct += torch.sum((preds == labels.data) & (labels == 0))
 
             n_high_bio_samples += torch.sum(labels == 1)
             n_low_bio_samples += torch.sum(labels == 0)
