@@ -231,15 +231,16 @@ def load_checkpoint(model, pretrained_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file',
-                        default="/home/simon/aau/BioVista-PointNext/cfgs/biovista_2D_3D/pointvector-s.yaml")
+                        default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
     # default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
+                        # default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth")
 
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
     
     parser.add_argument('--seed', type=int, help='Random seed', default=42)
     
@@ -283,10 +284,10 @@ if __name__ == "__main__":
 
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
-    transform = Compose([PointsToTensor(), PointCloudXYZAlign()])
+    transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
+    # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 

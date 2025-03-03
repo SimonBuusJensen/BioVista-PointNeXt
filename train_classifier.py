@@ -21,12 +21,12 @@ def str2bool(v):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file',
-                        # default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
-                        default="cfgs/biovista/pointvector-s.yaml")
+                        default="/workspace/src/cfgs/biovista/pointvector-s.yaml")
+                        # default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument('--dataset_csv', type=str, help='dataset csv file', 
-                        # default="/workspace/datasets/samples.csv") 
+                        default="/workspace/datasets/samples.csv") 
                         # default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
+                        # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=2)
     parser.add_argument("--pcl_file_format", type=str, help="Point cloud file format (npz | laz)", default="npz")
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb", type=str2bool, help="Whether to log to weights and biases", default=False)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Baseline-with-Best-Settings")
     parser.add_argument("--model_weights", type=str, help="Path to the model weights file.",
-                          default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                          default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
 
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()

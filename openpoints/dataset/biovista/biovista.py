@@ -206,8 +206,7 @@ class BioVista(Dataset):
 
             # Append the gravity dimension to the data (height of the point cloud)
             if "h" in self.channels:
-                point_heights = points[:, self.gravity_dim:self.gravity_dim +
-                                     1] - points[:, self.gravity_dim:self.gravity_dim+1].min()
+                point_heights = points[:, self.gravity_dim:self.gravity_dim + 1] - points[:, self.gravity_dim:self.gravity_dim+1].min()
                 point_heights_tensor = torch.from_numpy(point_heights) 
                 data['x'] = torch.cat((data['x'], point_heights_tensor), dim=1)
 
