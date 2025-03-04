@@ -131,14 +131,13 @@ class MultiModalFusionModel(nn.Module):
                                     option=3,
                                     dropout_rate=0.0)
 
-    def forward(self, image, point_cloud):
+    def forward(self, data):
         # Extract image features. (Assume image is (B, C, H, W))
-        image_features = self.image_backbone.get_feature_encodings(image)
+        image_features = self.image_backbone.get_feature_encodings(data['img'])
 
         # Extract point cloud features.
         # Here we use forward_cls_feat; ensure your point cloud data is in the expected format.
-        point_features = self.point_backbone_encoder.forward_cls_feat(
-            point_cloud)
+        point_features = self.point_backbone.encoder.forward_cls_feat(data)
 
         # Concatenate features along the feature dimension.
         fused_features = torch.cat([image_features, point_features], dim=1)
@@ -159,8 +158,7 @@ class MultiModalFusionModel(nn.Module):
 
     def forward_3D_feature_encodings(self, point_cloud):
         # Extract Features from the 3D point cloud using the PointVector-S backbone.
-        point_features = self.point_backbone.encoder.forward_cls_feat(
-            point_cloud)
+        point_features = self.point_backbone.encoder.forward_cls_feat(point_cloud)
         return point_features
 
     def forward_2D_predictions(self, image):
@@ -215,7 +213,7 @@ class MultiModalFusionModel(nn.Module):
             ckpt_state_dict = state_dict['model']
             base_ckpt = {k.replace("module.", ""): v for k, v in ckpt_state_dict.items()}
         
-            model.load_state_dict(base_ckpt)
+            self.point_backbone.load_state_dict(base_ckpt)
             # epoch = state_dict.get('epoch', -1)
             print("Loaded PointVector-S weights.")
 
@@ -252,16 +250,18 @@ if __name__ == "__main__":
                         # default="/home/simon/data/BioVista/Forest-Biodiversity-Potential/samples.csv")
                         default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
-                        # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth")
-                        default=None)
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
+                        # default=None)
     parser.add_argument("--features_dir_2d", type=str, help="Path to a directory containing the 2D features of the images.",
-                        default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings/")
+                        # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings/")
+                        default=None)
 
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
-                        # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-                        default=None)
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        # default=None)
     parser.add_argument("--features_dir_3d", type=str, help="Path to a directory containing the 3D features of the point clouds.",
-                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings/")
+                        # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings/")
+                        default=None)
 
     parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
                         default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion/Baseline-Frozen/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
@@ -319,18 +319,18 @@ if __name__ == "__main__":
     # Test if we can load ResNet model weights
     # resnet_model_weights = "/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth"
     output_dir = os.path.dirname(mlp_weights)
-    model.load_weights(resnet_weights_path=None, pointvector_weights_path=None, mlp_weights_path=mlp_weights, map_location=device)
+    model.load_weights(resnet_weights_path=resnet_model_weights, pointvector_weights_path=pointvector_weights, mlp_weights_path=mlp_weights, map_location=device)
     model.to(device)
 
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
-    # transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
-    # test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
-    # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
-
-    test_dataset = FeatureDataset(csv_file=args.source, feature_dir_2d=features_dir_2d, feature_dir_3d=features_dir_3d, data_split="test")
+    transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
+    test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
+    
+    # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
+    # test_dataset = FeatureDataset(csv_file=args.source, feature_dir_2d=features_dir_2d, feature_dir_3d=features_dir_3d, data_split="test")
+    # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
     
     print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
@@ -346,73 +346,72 @@ if __name__ == "__main__":
 
     model.eval()
     with torch.set_grad_enabled(False):
-        for fn, X_test_batch, y_test_batch in tqdm(test_loader, desc="Evaluating on test set", total=test_loader.__len__()):
+        # for fn, X_test_batch, y_test_batch in tqdm(test_loader, desc="Evaluating on test set", total=test_loader.__len__()):
             
-            # Move tensors to the same device
-            X_test_batch = X_test_batch.to(device)
-            y_test_batch = y_test_batch.to(device)
-            # Forward pass
-
-            outputs = model.forward_MLP_predictions(X_test_batch)
-            confidences = torch.nn.functional.softmax(outputs, dim=1)
-            confidences = torch.max(confidences, 1)[0]
-
-            _, preds = torch.max(outputs, 1)
-            labels = torch.max(y_test_batch, 1)[1]
-            test_acc += torch.sum(preds == labels).item()
-
-            high_correct += torch.sum((preds == labels) & (labels == 1))
-            low_correct += torch.sum((preds == labels) & (labels == 0))
-
-            n_high_bio_samples += torch.sum(labels == 1)
-            n_low_bio_samples += torch.sum(labels == 0)
-
-            # Append results
-            pred_list.extend(preds.cpu().numpy())
-            label_list.extend(labels.cpu().numpy())
-            file_path_list.extend(fn)
-            conf_list.extend(confidences.cpu().detach().numpy())
-
-
-        # for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__()):
-
-        #     for key in data.keys():
-        #         data[key] = data[key].cuda(non_blocking=True)
-
-        #     image = data['img'].to(device)
-        #     points = data['x'].to(device)
-        #     labels = data['y'].to(device)
-            
-        #     data['pos'] = points[:, :, :3].contiguous()
-        #     data['x'] = points[:, :, :4].transpose(1, 2).contiguous()
-
+        #     # Move tensors to the same device
+        #     X_test_batch = X_test_batch.to(device)
+        #     y_test_batch = y_test_batch.to(device)
         #     # Forward pass
-        #     # outputs = model.forward_2D_predictions(image)
-        #     outputs = model.forward_3D_predictions(data)
-            
 
-        #     _, preds = torch.max(outputs, 1)
-        #     # Calculate the confidence scores between 0-100% for the predictions
+        #     outputs = model.forward_MLP_predictions(X_test_batch)
         #     confidences = torch.nn.functional.softmax(outputs, dim=1)
         #     confidences = torch.max(confidences, 1)[0]
 
-        #     test_acc += torch.sum(preds == labels.data)
+        #     _, preds = torch.max(outputs, 1)
+        #     labels = torch.max(y_test_batch, 1)[1]
+        #     test_acc += torch.sum(preds == labels).item()
 
-        #     high_correct += torch.sum((preds == labels.data) & (labels == 1))
-        #     low_correct += torch.sum((preds == labels.data) & (labels == 0))
+        #     high_correct += torch.sum((preds == labels) & (labels == 1))
+        #     low_correct += torch.sum((preds == labels) & (labels == 0))
 
         #     n_high_bio_samples += torch.sum(labels == 1)
         #     n_low_bio_samples += torch.sum(labels == 0)
 
-        #     # Append the predictions and labels to the lists
+        #     # Append results
         #     pred_list.extend(preds.cpu().numpy())
         #     label_list.extend(labels.cpu().numpy())
         #     file_path_list.extend(fn)
-        #     # Append the confidence scores as float with 2 decimals
         #     conf_list.extend(confidences.cpu().detach().numpy())
 
+
+        for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__()):
+
+            for key in data.keys():
+                data[key] = data[key].cuda(non_blocking=True)
+
+            labels = data['y'].to(device)
+            
+            data['pos'] = data['x'][:, :, :3].contiguous()
+            data['x'] = data['x'][:, :, :4].transpose(1, 2).contiguous()
+
+            # Forward pass
+            # outputs = model.forward_2D_predictions(data['img'])
+            # outputs = model.forward_3D_predictions(data)
+            outputs = model(data)
+            
+
+            _, preds = torch.max(outputs, 1)
+            # Calculate the confidence scores between 0-100% for the predictions
+            confidences = torch.nn.functional.softmax(outputs, dim=1)
+            confidences = torch.max(confidences, 1)[0]
+
+            test_acc += torch.sum(preds == labels.data)
+
+            high_correct += torch.sum((preds == labels.data) & (labels == 1))
+            low_correct += torch.sum((preds == labels.data) & (labels == 0))
+
+            n_high_bio_samples += torch.sum(labels == 1)
+            n_low_bio_samples += torch.sum(labels == 0)
+
+            # Append the predictions and labels to the lists
+            pred_list.extend(preds.cpu().numpy())
+            label_list.extend(labels.cpu().numpy())
+            file_path_list.extend(fn)
+            # Append the confidence scores as float with 2 decimals
+            conf_list.extend(confidences.cpu().detach().numpy())
+
     # Calculate the overall validation accuracy
-    overall_val_acc = round(test_acc / len(test_dataset) * 100, 2)
+    overall_val_acc = round(test_acc.item() / len(test_dataset) * 100, 2)
     if n_high_bio_samples.item() == 0:
         overall_val_acc_high = 0.0
     else:
