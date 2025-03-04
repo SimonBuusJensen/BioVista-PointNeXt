@@ -84,7 +84,6 @@ if __name__ == "__main__":
     
     # Setup output dir for the experiment to save log, models, test results, etc.
     cfg.experiment_dir = os.path.join(os.path.dirname(args.source), "experiments", "2D-3D-Fusion", "MLP-Fusion", cfg.project_name, experiment_name)
-    print(f"Output directory: {cfg.experiment_dir}")
     os.makedirs(cfg.experiment_dir, exist_ok=True)
     
     # Init logger
@@ -110,8 +109,7 @@ if __name__ == "__main__":
     # model = build_model_from_cfg(cfg.model).to(device)
     model = MultiModalFusionModel()
     model_size = cal_model_parm_nums(model)
-    # print(model)
-    print('Number of params: %.4f M' % (model_size / 1e6))
+    logging.info(f'Number of params: {(model_size / 1e6)} M')
 
     # Check model weights
     resnet_model_weights = args.resnet_weights
@@ -132,11 +130,11 @@ if __name__ == "__main__":
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    # train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
+    train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    # val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
+    val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     """
     Training
@@ -272,10 +270,10 @@ if __name__ == "__main__":
                 # Delete the previous best model (*.pth file)
                 prev_best_model = glob.glob1(cfg.experiment_dir, "multi_modal_fusion_model_*.pth")
                 if len(prev_best_model) > 0:
-                    print(f"Deleting previous best model: {prev_best_model[0]}")
+                    logging.info(f"Deleting previous best model: {prev_best_model[0]}")
                     os.remove(os.path.join(cfg.experiment_dir, prev_best_model[0]))
                 
-                print (f"Saving the best model with overall accuracy: {best_val_overall_acc:.2f}%")
+                logging.info(f"Saving the best model with overall accuracy: {best_val_overall_acc:.2f}%")
                 cur_best_model_fp = os.path.join(cfg.experiment_dir, f"multi_modal_fusion_model_{best_val_overall_acc:.2f}_epoch_{epoch}.pth")
                 torch.save(model.state_dict(), cur_best_model_fp)
 
@@ -310,8 +308,7 @@ if __name__ == "__main__":
 
     test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
-    print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
+    logging.info("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
     overall_test_acc = 0.0
     high_correct_test = 0
@@ -327,11 +324,11 @@ if __name__ == "__main__":
     TESTING
     """
     load_checkpoint(model, pretrained_path=cur_best_model_fp)
-    print(f"Loaded the best model from epoch {best_epoch} found during validation.")
+    logging.info(f"Loaded the best model from epoch {best_epoch} found during validation.")
     
     model.eval()
     with torch.set_grad_enabled(False):
-        for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__()):
+        for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__(), desc=f"Testing:"):
 
             for key in data.keys():
                 data[key] = data[key].cuda(non_blocking=True)
@@ -400,21 +397,16 @@ if __name__ == "__main__":
             low_correct_test.item() / n_low_bio_samples_test.item() * 100, 2)
 
     # Write the image_paths, predictions and labels to a csv file
-    pred_label_fp = os.path.join(cfg.experiment_dir, f"prediction_labels_from_the_mulitmodal_fusion_model.csv")
+    pred_label_fp = os.path.join(cfg.experiment_dir, f"test_prediction_labels.csv")
     with open(pred_label_fp, "w") as f:
         f.write("image_path,prediction,label,correct,confidence\n")
         for img_path, pred, label, conf in zip(test_file_path_list, test_pred_list, test_label_list, test_conf_list):
-            f.write(
-                f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
+            f.write(f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
         # Write overall high, low and total accuracy
-        f.write(
-            f"Low bio correct,{low_correct_test.item()},{n_low_bio_samples_test.item()},{overall_val_acc_low}\n")
-        f.write(
-            f"High bio correct,{high_correct_test.item()},{n_high_bio_samples_test.item()},{overall_val_acc_high}\n")
-        f.write(
-            f"Overall test accuracy,{low_correct_test.item() + high_correct_test.item()},{len(test_dataset)},{round(overall_test_acc, 2)}\n")
-        f.write(
-            f"Mean test accuracy,,,{round((overall_val_acc_low + overall_val_acc_high) / 2, 2)}\n")
+        f.write(f"Low bio correct,{low_correct_test.item()},{n_low_bio_samples_test.item()},{overall_val_acc_low}\n")
+        f.write(f"High bio correct,{high_correct_test.item()},{n_high_bio_samples_test.item()},{overall_val_acc_high}\n")
+        f.write(f"Overall test accuracy,{low_correct_test.item() + high_correct_test.item()},{len(test_dataset)},{round(overall_test_acc, 2)}\n")
+        f.write(f"Mean test accuracy,,,{round((overall_val_acc_low + overall_val_acc_high) / 2, 2)}\n")
     f.close()
     
     if args.use_wandb:

@@ -255,7 +255,7 @@ if __name__ == "__main__":
                         default=None)
     parser.add_argument("--features_dir_2d", type=str, help="Path to a directory containing the 2D features of the images.",
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings/")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings")
+                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/BioVista-Multimodal-Fusion-Active-Weights-Test/2025-03-04-14-50-13-BioVista-Multimodal-Fusion-Active-Weights-Test/resnet_encodings")
                         # default=None)
 
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
@@ -264,13 +264,18 @@ if __name__ == "__main__":
                         default=None)
     parser.add_argument("--features_dir_3d", type=str, help="Path to a directory containing the 3D features of the point clouds.",
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings/")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings")
+                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/BioVista-Multimodal-Fusion-Active-Weights-Test/2025-03-04-14-50-13-BioVista-Multimodal-Fusion-Active-Weights-Test/pointvector_encodings")
                         # default=None)
 
     parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion/Baseline-Frozen/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
-
+                        # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
+                        default=None)
+    
+    parser.add_argument('--multi_modal_weights', type=str, help='MultiModalFusionModel weights file', 
+                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/BioVista-Multimodal-Fusion-Active-Weights-Test/2025-03-04-14-50-13-BioVista-Multimodal-Fusion-Active-Weights-Test/multi_modal_fusion_model_69.00_epoch_2.pth")
+    
+    
     parser.add_argument('--seed', type=int, help='Random seed', default=42)
     
     args, opts = parser.parse_known_args()
@@ -304,6 +309,7 @@ if __name__ == "__main__":
     resnet_model_weights = args.resnet_weights
     pointvector_weights = args.pointvector_weights
     mlp_weights = args.mlp_weights
+    multi_modal_weights = args.multi_modal_weights
     features_dir_2d = args.features_dir_2d
     features_dir_3d = args.features_dir_3d
     
@@ -313,18 +319,24 @@ if __name__ == "__main__":
         assert os.path.exists(pointvector_weights), "PointVector-S model weights not found."
     if mlp_weights is not None:
         assert os.path.exists(mlp_weights), "MLP model weights not found."  
+    if multi_modal_weights is not None:
+        assert os.path.exists(multi_modal_weights), "MultiModalFusionModel weights not found."
 
-        # In case of MLP weights, we need either the 2D or 3D features directory or the pre-trained model weights
-        if features_dir_2d is not None:
-            assert os.path.exists(features_dir_2d), f"2D features directory not found: {features_dir_2d}"
-        if features_dir_3d is not None:
-            assert os.path.exists(features_dir_3d), f"3D features directory not found: {features_dir_3d}"
+    # In case of MLP weights, we need either the 2D or 3D features directory or the pre-trained model weights
+    if features_dir_2d is not None:
+        assert os.path.exists(features_dir_2d), f"2D features directory not found: {features_dir_2d}"
+    if features_dir_3d is not None:
+        assert os.path.exists(features_dir_3d), f"3D features directory not found: {features_dir_3d}"
 
 
     # Test if we can load ResNet model weights
     # resnet_model_weights = "/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth"
-    output_dir = os.path.dirname(mlp_weights)
-    model.load_weights(resnet_weights_path=resnet_model_weights, pointvector_weights_path=pointvector_weights, mlp_weights_path=mlp_weights, map_location=device)
+    output_dir = os.path.dirname(multi_modal_weights)
+    model.load_weights(resnet_weights_path=resnet_model_weights, 
+                       pointvector_weights_path=pointvector_weights, 
+                       mlp_weights_path=mlp_weights, 
+                       multimodal_weights_path=multi_modal_weights,
+                       map_location=device)
     model.to(device)
 
     from torchvision.transforms import Compose
@@ -438,14 +450,12 @@ if __name__ == "__main__":
     if n_high_bio_samples.item() == 0:
         overall_val_acc_high = 0.0
     else:
-        overall_val_acc_high = round(
-            high_correct.item() / n_high_bio_samples.item() * 100, 2)
+        overall_val_acc_high = round(high_correct.item() / n_high_bio_samples.item() * 100, 2)
 
     if n_low_bio_samples.item() == 0:
         overall_val_acc_low = 0.0
     else:
-        overall_val_acc_low = round(
-            low_correct.item() / n_low_bio_samples.item() * 100, 2)
+        overall_val_acc_low = round(low_correct.item() / n_low_bio_samples.item() * 100, 2)
 
     # Write the image_paths, predictions and labels to a csv file
     pred_label_fp = os.path.join(
@@ -453,15 +463,10 @@ if __name__ == "__main__":
     with open(pred_label_fp, "w") as f:
         f.write("image_path,prediction,label,correct,confidence\n")
         for img_path, pred, label, conf in zip(file_path_list, pred_list, label_list, conf_list):
-            f.write(
-                f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
+            f.write(f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
         # Write overall high, low and total accuracy
-        f.write(
-            f"Low bio correct,{low_correct.item()},{n_low_bio_samples.item()},{overall_val_acc_low}\n")
-        f.write(
-            f"High bio correct,{high_correct.item()},{n_high_bio_samples.item()},{overall_val_acc_high}\n")
-        f.write(
-            f"Overall test accuracy,{test_acc},{len(test_dataset)},{overall_val_acc}\n")
-        f.write(
-            f"Mean test accuracy,,,{(overall_val_acc_low + overall_val_acc_high) / 2}\n")
+        f.write(f"Low bio correct,{low_correct.item()},{n_low_bio_samples.item()},{overall_val_acc_low}\n")
+        f.write(f"High bio correct,{high_correct.item()},{n_high_bio_samples.item()},{overall_val_acc_high}\n")
+        f.write(f"Overall test accuracy,{low_correct.item() + high_correct.item()},{len(test_dataset)},{overall_val_acc}\n")
+        f.write(f"Mean test accuracy,,,{(round(overall_val_acc_low + overall_val_acc_high) / 2, 2)}\n")
     f.close()
