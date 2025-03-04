@@ -11,11 +11,10 @@ from torchvision.models import resnet18
 from datetime import datetime
 from tqdm import tqdm
 
-from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed
-from openpoints.models.backbone.pointvector import PointVectorEncoder
-from openpoints.models.classification.cls_base import ClsHead
+from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed, AverageMeter, ConfusionMatrix
+from openpoints.optim import build_optimizer_from_cfg
+from openpoints.loss import build_criterion_from_cfg
 from openpoints.dataset import BioVista2D3D
-from fusion_classifier.FeatureDataset import FeatureDataset
 from Test_MultiModalFusionModel import MultiModalFusionModel
 from train_classifier import str2bool
 
@@ -51,13 +50,13 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='Random seed', default=42)
     
     # Training arguments
-    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=2)
+    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=10)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
     parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
     
     # General arguments
-    parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=False)
+    parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
     parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Multimodal-Fusion-Active-Weights-Test")
     
     args, opts = parser.parse_known_args()
@@ -99,6 +98,7 @@ if __name__ == "__main__":
         wandb.init(project=cfg.wandb.project, name=experiment_name)
         wandb.config.update(args)
         wandb.save(log_file)
+        
     # Model arguments
     cfg.model.encoder_args.in_channels = 4  # xyzh
     cfg.model.encoder_args.radius = 0.65
@@ -131,6 +131,7 @@ if __name__ == "__main__":
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
@@ -138,6 +139,60 @@ if __name__ == "__main__":
     """
     Training
     """
+    optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
+    criterion_args = {'NAME': 'CrossEntropy', 'label_smoothing': 0.2}
+    criterion = build_criterion_from_cfg(criterion_args)
+    loss_meter = AverageMeter()
+    cm = ConfusionMatrix(num_classes=cfg.num_classes)
+
+    model.train()  # set model to training mode
+    
+    for epoch in range(1, cfg.epochs + 1):
+        pbar = tqdm(enumerate(train_loader), total=train_loader.__len__(), desc=f"Train Epoch [{epoch}/{cfg.epochs}]")
+        for idx, (fn, data) in pbar:
+            
+            for key in data.keys():
+                data[key] = data[key].cuda(non_blocking=True)
+        
+            points = data['x']
+            target = data['y']
+        
+            data['pos'] = points[:, :, :3].contiguous()
+            data['x'] = points[:, :, :cfg.model.encoder_args.in_channels].transpose(1, 2).contiguous()
+            
+            # Forward pass
+            _2D_features = model.forward_2D_feature_encodings(data['img'])
+            _3D_features = model.forward_3D_feature_encodings(data)
+            features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
+            
+            logits = model.forward_MLP_predictions(features_2D_3D)
+            loss = criterion(logits, target)
+            
+            loss.backward()
+            
+            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_norm_clip, norm_type=2)    
+            optimizer.step()
+            model.zero_grad()
+        
+            # update confusion matrix
+            cm.update(logits.argmax(dim=1), target)
+            loss_meter.update(loss.item())
+        
+        # Calculate the accuracy and overall accuracy
+        train_loss = loss_meter.avg
+        train_macc, train_oa, accs = cm.all_acc()
+        lr = optimizer.param_groups[0]['lr']
+        
+        if args.use_wandb:
+            wandb.log({
+                "train_loss": train_loss,
+                "train_acc": train_macc,
+                "train_oa": train_oa,
+                "lr": lr,
+                "epoch": epoch
+            })
+
+        
 
     # test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
