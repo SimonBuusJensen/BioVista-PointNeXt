@@ -131,11 +131,11 @@ if __name__ == "__main__":
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    # train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
+    train_loader.dataset.df = train_loader.dataset.df.sample(1000, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    # val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
+    val_loader.dataset.df = val_loader.dataset.df.sample(1000, random_state=cfg.seed)
     
     """
     Training
@@ -309,6 +309,7 @@ if __name__ == "__main__":
 
     test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
+    test_loader.dataset.df = test_loader.dataset.df.sample(1000, random_state=cfg.seed)
     logging.info("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
     overall_test_acc = 0.0
