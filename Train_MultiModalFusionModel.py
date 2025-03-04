@@ -42,11 +42,11 @@ if __name__ == "__main__":
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
                         # default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
-                        # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
+                        # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
-                        # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
     # parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion/Baseline-Frozen/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
@@ -56,7 +56,8 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=5)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
-    parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
+    parser.add_argument("--backbone_lr", type=float, help="Learning rate", default=None)
+    parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
     
     # General arguments
     parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
@@ -131,11 +132,11 @@ if __name__ == "__main__":
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    train_loader.dataset.df = train_loader.dataset.df.sample(1000, random_state=cfg.seed)
+    # train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    val_loader.dataset.df = val_loader.dataset.df.sample(1000, random_state=cfg.seed)
+    # val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     """
     Training
@@ -144,9 +145,24 @@ if __name__ == "__main__":
     cfg.epochs = args.epochs
     cfg.batch_size = args.batch_size
     cfg.num_workers = args.num_workers
-    cfg.lr = args.lr
+    if cfg.num_workers == 0:
+        logging.warning("The number of workers is set to 0, which may slow down the training process.")
+    cfg.fusion_lr = args.fusion_lr
+    assert cfg.fusion_lr is not None, "The fusion learning rate must be provided."
     
-    optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
+    if args.backbone_lr is None:
+        cfg.backbone_lr = cfg.fusion_lr * 0.1
+    else:
+        cfg.backbone_lr = args.backbone_lr
+
+    
+    # optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
+    optimizer = torch.optim.AdamW([
+        {"params": model.image_backbone.parameters(), "lr": cfg.backbone_lr},
+        {"params": model.point_backbone.parameters(), "lr": cfg.backbone_lr},
+        {"params": model.fusion_head.parameters(), "lr": cfg.fusion_lr},
+    ], weight_decay=1e-2)  # Default weight decay is 1e-2
+
     scheduler = build_scheduler_from_cfg(cfg, optimizer)
     criterion_args = {'NAME': 'CrossEntropy', 'label_smoothing': 0.2}
     criterion = build_criterion_from_cfg(criterion_args)
@@ -189,19 +205,21 @@ if __name__ == "__main__":
         # Calculate the accuracy and overall accuracy
         train_loss = loss_meter.avg
         train_macc, train_oacc, accs = train_cm.all_acc()
-        lr = optimizer.param_groups[0]['lr']
+        fusion_lr = optimizer.param_groups[2]['lr']
+        backbone_lr = optimizer.param_groups[0]['lr']
         
         if args.use_wandb:
             wandb.log({
                 "train_loss": train_loss,
                 "train_macc": train_macc,
                 "train_oacc": train_oacc,
-                "lr": lr,
+                "fusion_lr": fusion_lr,
+                "backbone_lr": backbone_lr,
                 "epoch": epoch
             })
 
         # Log the training results
-        logging.info(f"Train: Overall acc (%): {train_oacc:.1f}%, Loss: {train_loss:.3f}, lr: {round(lr, 7)}")
+        logging.info(f"Train: Overall acc (%): {train_oacc:.1f}%, Loss: {train_loss:.3f}, fusion_lr: {round(fusion_lr, 7)}, backbone_lr: {round(backbone_lr, 7)}")
         for class_idx in range(train_cm.num_classes):
             class_total_train = train_cm.actual[class_idx].item()
             class_correct_train = train_cm.tp[class_idx].item()
@@ -302,6 +320,7 @@ if __name__ == "__main__":
                 wandb.log({
                     "val_acc": val_macc,
                     "val_oacc": val_overall_acc,
+                    "best_val_oacc": best_val_overall_acc,
                     "epoch": epoch
                 })
         
@@ -309,7 +328,7 @@ if __name__ == "__main__":
 
     test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    test_loader.dataset.df = test_loader.dataset.df.sample(1000, random_state=cfg.seed)
+    # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
     logging.info("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
     overall_test_acc = 0.0
