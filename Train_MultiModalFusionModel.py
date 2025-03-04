@@ -15,6 +15,7 @@ from tqdm import tqdm
 from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed, AverageMeter, ConfusionMatrix, load_checkpoint
 from openpoints.optim import build_optimizer_from_cfg
 from openpoints.loss import build_criterion_from_cfg
+from openpoints.scheduler import build_scheduler_from_cfg
 from openpoints.dataset import BioVista2D3D
 from Test_MultiModalFusionModel import MultiModalFusionModel
 from train_classifier import str2bool
@@ -131,11 +132,11 @@ if __name__ == "__main__":
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
+    # train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
+    # val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     """
     Training
@@ -147,6 +148,7 @@ if __name__ == "__main__":
     cfg.lr = args.lr
     
     optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
+    scheduler = build_scheduler_from_cfg(cfg, optimizer)
     criterion_args = {'NAME': 'CrossEntropy', 'label_smoothing': 0.2}
     criterion = build_criterion_from_cfg(criterion_args)
     best_val_overall_acc = 0.0
@@ -200,7 +202,7 @@ if __name__ == "__main__":
             })
 
         # Log the training results
-        logging.info(f"Train: Overall acc (%): {train_oacc:.1f}%, Loss: {train_loss:.3f}, lr: {lr}")
+        logging.info(f"Train: Overall acc (%): {train_oacc:.1f}%, Loss: {train_loss:.3f}, lr: {round(lr, 7)}")
         for class_idx in range(train_cm.num_classes):
             class_total_train = train_cm.actual[class_idx].item()
             class_correct_train = train_cm.tp[class_idx].item()
@@ -303,10 +305,12 @@ if __name__ == "__main__":
                     "val_oacc": val_overall_acc,
                     "epoch": epoch
                 })
+        
+        scheduler.step(epoch)
 
     test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
+    # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
     print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
     overall_test_acc = 0.0
@@ -412,3 +416,11 @@ if __name__ == "__main__":
         f.write(
             f"Mean test accuracy,,,{round((overall_val_acc_low + overall_val_acc_high) / 2, 2)}\n")
     f.close()
+    
+    if args.use_wandb:
+        wandb.log({
+            "test_macc": round((overall_val_acc_low + overall_val_acc_high) / 2, 2),
+            "test_oacc": overall_test_acc,
+            "test_low_bio_acc": overall_val_acc_low,
+            "test_high_bio_acc": overall_val_acc_high
+        })
