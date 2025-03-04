@@ -1,10 +1,14 @@
 import argparse
 import torch
 import os
+import logging
+import sys
+import wandb
 import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision.models import resnet18
+from datetime import datetime
 from tqdm import tqdm
 
 from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed
@@ -13,6 +17,18 @@ from openpoints.models.classification.cls_base import ClsHead
 from openpoints.dataset import BioVista2D3D
 from fusion_classifier.FeatureDataset import FeatureDataset
 from Test_MultiModalFusionModel import MultiModalFusionModel
+from train_classifier import str2bool
+
+def setup_logger(log_file):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    return logging.getLogger()
 
 
 if __name__ == "__main__":
@@ -25,27 +41,24 @@ if __name__ == "__main__":
                         # default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
-                        # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
-                        default=None)
-    parser.add_argument("--features_dir_2d", type=str, help="Path to a directory containing the 2D features of the images.",
-                        # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings/")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings")
-                        # default=None)
-
+                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-                        # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
-                        default=None)
-    parser.add_argument("--features_dir_3d", type=str, help="Path to a directory containing the 3D features of the point clouds.",
-                        # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings/")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings")
-                        # default=None)
-
-    parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
+                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+    # parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion/Baseline-Frozen/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
-                        default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
-
+                        # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
     parser.add_argument('--seed', type=int, help='Random seed', default=42)
+    
+    # Training arguments
+    parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=2)
+    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
+    parser.add_argument("--lr", type=float, help="Learning rate", default=0.0001)
+    
+    # General arguments
+    parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=False)
+    parser.add_argument("--project_name", type=str, help="Weights and biases project name", default="BioVista-Multimodal-Fusion-Active-Weights-Test")
     
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
@@ -61,6 +74,31 @@ if __name__ == "__main__":
     set_random_seed(cfg.seed, deterministic=cfg.deterministic)
     torch.backends.cudnn.enabled = True    
     
+    # Setup project name and experiment name
+    assert args.project_name is not None
+    assert isinstance(args.project_name, str), "The project_name must be a string."
+    cfg.project_name = args.project_name
+    date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    experiment_name = f"{date_now_str}-{cfg.project_name}"
+    
+    # Setup output dir for the experiment to save log, models, test results, etc.
+    cfg.experiment_dir = os.path.join(os.path.dirname(args.source), "experiments", "2D-3D-Fusion", "MLP-Fusion", cfg.project_name, experiment_name)
+    print(f"Output directory: {cfg.experiment_dir}")
+    os.makedirs(cfg.experiment_dir, exist_ok=True)
+    
+    # Init logger
+    log_file = os.path.join(cfg.experiment_dir, f"{experiment_name}.log")
+    setup_logger(log_file) 
+
+    
+    # Setup wandb
+    assert isinstance(args.use_wandb, bool), "The use_wandb must be a boolean."
+    if args.use_wandb and cfg.mode == "train":
+        cfg.wandb.use_wandb = True
+        cfg.wandb.project = cfg.project_name
+        wandb.init(project=cfg.wandb.project, name=experiment_name)
+        wandb.config.update(args)
+        wandb.save(log_file)
     # Model arguments
     cfg.model.encoder_args.in_channels = 4  # xyzh
     cfg.model.encoder_args.radius = 0.65
@@ -77,165 +115,133 @@ if __name__ == "__main__":
     # Check model weights
     resnet_model_weights = args.resnet_weights
     pointvector_weights = args.pointvector_weights
-    mlp_weights = args.mlp_weights
-    features_dir_2d = args.features_dir_2d
-    features_dir_3d = args.features_dir_3d
     
-    if resnet_model_weights is not None:
-        assert os.path.exists(resnet_model_weights), "ResNet model weights not found."
-    if pointvector_weights is not None:
-        assert os.path.exists(pointvector_weights), "PointVector-S model weights not found."
-    if mlp_weights is not None:
-        assert os.path.exists(mlp_weights), "MLP model weights not found."  
-
-        # In case of MLP weights, we need either the 2D or 3D features directory or the pre-trained model weights
-        if features_dir_2d is not None:
-            assert os.path.exists(features_dir_2d), f"2D features directory not found: {features_dir_2d}"
-        if features_dir_3d is not None:
-            assert os.path.exists(features_dir_3d), f"3D features directory not found: {features_dir_3d}"
-
-
+    assert resnet_model_weights is not None, "ResNet model weights must be provided."
+    assert os.path.exists(resnet_model_weights), "ResNet model weights not found."
+    assert pointvector_weights is not None, "PointVector-S model weights must be provided."
+    assert os.path.exists(pointvector_weights), "PointVector-S model weights not found."
+    
     # Test if we can load ResNet model weights
     # resnet_model_weights = "/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth"
-    output_dir = os.path.dirname(mlp_weights)
-    model.load_weights(resnet_weights_path=resnet_model_weights, pointvector_weights_path=pointvector_weights, mlp_weights_path=mlp_weights, map_location=device)
+    model.load_weights(resnet_weights_path=resnet_model_weights, pointvector_weights_path=pointvector_weights, mlp_weights_path=None, map_location=device)
     model.to(device)
 
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
+    train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    
+    val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    
+    """
+    Training
+    """
+
     # test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
     # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
-    
-    test_dataset = FeatureDataset(csv_file=args.source, feature_dir_2d=features_dir_2d, feature_dir_3d=features_dir_3d, data_split="test")
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    
-    print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
+    # print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
-    test_acc = 0.0
-    high_correct = 0
-    low_correct = 0
-    n_high_bio_samples = 0
-    n_low_bio_samples = 0
-    pred_list = []
-    conf_list = []
-    label_list = []
-    file_path_list = []
+    # test_acc = 0.0
+    # high_correct = 0
+    # low_correct = 0
+    # n_high_bio_samples = 0
+    # n_low_bio_samples = 0
+    # pred_list = []
+    # conf_list = []
+    # label_list = []
+    # file_path_list = []
 
-    model.eval()
-    with torch.set_grad_enabled(False):
-        for fn, X_test_batch, y_test_batch in tqdm(test_loader, desc="Evaluating on test set", total=test_loader.__len__()):
+    # """
+    # TESTING
+    # """
+    # model.eval()
+    # with torch.set_grad_enabled(False):
+    #     for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__()):
+
+    #         for key in data.keys():
+    #             data[key] = data[key].cuda(non_blocking=True)
+
+    #         labels = data['y'].to(device)
             
-            # Move tensors to the same device
-            X_test_batch = X_test_batch.to(device)
-            y_test_batch = y_test_batch.to(device)
-            # Forward pass
+    #         data['pos'] = data['x'][:, :, :3].contiguous()
+    #         data['x'] = data['x'][:, :, :4].transpose(1, 2).contiguous()
 
-            outputs = model.forward_MLP_predictions(X_test_batch)
-            confidences = torch.nn.functional.softmax(outputs, dim=1)
-            confidences = torch.max(confidences, 1)[0]
-
-            _, preds = torch.max(outputs, 1)
-            labels = torch.max(y_test_batch, 1)[1]
-            test_acc += torch.sum(preds == labels.data)
-
-            high_correct += torch.sum((preds == labels) & (labels == 1))
-            low_correct += torch.sum((preds == labels) & (labels == 0))
-
-            n_high_bio_samples += torch.sum(labels == 1)
-            n_low_bio_samples += torch.sum(labels == 0)
-
-            # Append results
-            pred_list.extend(preds.cpu().numpy())
-            label_list.extend(labels.cpu().numpy())
-            file_path_list.extend(fn)
-            conf_list.extend(confidences.cpu().detach().numpy())
-
-
-        # for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__()):
-
-        #     for key in data.keys():
-        #         data[key] = data[key].cuda(non_blocking=True)
-
-        #     labels = data['y'].to(device)
+    #         # Forward pass
+    #         _2D_features = model.forward_2D_feature_encodings(data['img'])
+    #         _3D_features = model.forward_3D_feature_encodings(data)
+    #         features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
             
-        #     data['pos'] = data['x'][:, :, :3].contiguous()
-        #     data['x'] = data['x'][:, :, :4].transpose(1, 2).contiguous()
-
-        #     # Forward pass
-        #     _2D_features = model.forward_2D_feature_encodings(data['img'])
-        #     _3D_features = model.forward_3D_feature_encodings(data)
-        #     features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
+    #         # Save the 2D and 3D encodings
+    #         image_file_name = os.path.basename(fn[0]) + "_30m.png"
+    #         _2D_feature_dir = os.path.join(os.path.dirname(resnet_model_weights), "resnet_encodings")
+    #         if not os.path.exists(_2D_feature_dir):
+    #             os.makedirs(_2D_feature_dir, exist_ok=True)
+    #         _2D_feature_fp = os.path.join(_2D_feature_dir, image_file_name.replace(".png", ".npy"))
             
-        #     # Save the 2D and 3D encodings
-        #     image_file_name = os.path.basename(fn[0]) + "_30m.png"
-        #     _2D_feature_dir = os.path.join(os.path.dirname(resnet_model_weights), "resnet_encodings")
-        #     if not os.path.exists(_2D_feature_dir):
-        #         os.makedirs(_2D_feature_dir, exist_ok=True)
-        #     _2D_feature_fp = os.path.join(_2D_feature_dir, image_file_name.replace(".png", ".npy"))
+    #         if not os.path.exists(_2D_feature_fp):
+    #             np.save(_2D_feature_fp, _2D_features.cpu().numpy())
             
-        #     if not os.path.exists(_2D_feature_fp):
-        #         np.save(_2D_feature_fp, _2D_features.cpu().numpy())
+    #         point_cloud_file_name = os.path.basename(fn[0]) + "_30m.npz"
+    #         _3D_feature_dir = os.path.join(os.path.dirname(os.path.dirname(pointvector_weights)), "pointvector_encodings")
+    #         if not os.path.exists(_3D_feature_dir):
+    #             os.makedirs(_3D_feature_dir, exist_ok=True)
+    #         _3D_feature_fp = os.path.join(_3D_feature_dir, point_cloud_file_name.replace(".npz", ".npy"))
             
-        #     point_cloud_file_name = os.path.basename(fn[0]) + "_30m.npz"
-        #     _3D_feature_dir = os.path.join(os.path.dirname(os.path.dirname(pointvector_weights)), "pointvector_encodings")
-        #     if not os.path.exists(_3D_feature_dir):
-        #         os.makedirs(_3D_feature_dir, exist_ok=True)
-        #     _3D_feature_fp = os.path.join(_3D_feature_dir, point_cloud_file_name.replace(".npz", ".npy"))
+    #         if not os.path.exists(_3D_feature_fp):
+    #             np.save(_3D_feature_fp, _3D_features.cpu().numpy())
             
-        #     if not os.path.exists(_3D_feature_fp):
-        #         np.save(_3D_feature_fp, _3D_features.cpu().numpy())
-            
-        #     outputs = model.forward_MLP_predictions(features_2D_3D)
-        #     _, preds = torch.max(outputs, 1)
-        #     # Calculate the confidence scores between 0-100% for the predictions
-        #     confidences = torch.nn.functional.softmax(outputs, dim=1)
-        #     confidences = torch.max(confidences, 1)[0]
+    #         outputs = model.forward_MLP_predictions(features_2D_3D)
+    #         _, preds = torch.max(outputs, 1)
+    #         # Calculate the confidence scores between 0-100% for the predictions
+    #         confidences = torch.nn.functional.softmax(outputs, dim=1)
+    #         confidences = torch.max(confidences, 1)[0]
 
-        #     test_acc += torch.sum(preds == labels.data)
-        #     high_correct += torch.sum((preds == labels.data) & (labels == 1))
-        #     low_correct += torch.sum((preds == labels.data) & (labels == 0))
+    #         test_acc += torch.sum(preds == labels.data)
+    #         high_correct += torch.sum((preds == labels.data) & (labels == 1))
+    #         low_correct += torch.sum((preds == labels.data) & (labels == 0))
 
-        #     n_high_bio_samples += torch.sum(labels == 1)
-        #     n_low_bio_samples += torch.sum(labels == 0)
+    #         n_high_bio_samples += torch.sum(labels == 1)
+    #         n_low_bio_samples += torch.sum(labels == 0)
 
-        #     # Append the predictions and labels to the lists
-        #     pred_list.extend(preds.cpu().numpy())
-        #     label_list.extend(labels.cpu().numpy())
-        #     file_path_list.extend(fn)
-        #     # Append the confidence scores as float with 2 decimals
-        #     conf_list.extend(confidences.cpu().detach().numpy())
+    #         # Append the predictions and labels to the lists
+    #         pred_list.extend(preds.cpu().numpy())
+    #         label_list.extend(labels.cpu().numpy())
+    #         file_path_list.extend(fn)
+    #         # Append the confidence scores as float with 2 decimals
+    #         conf_list.extend(confidences.cpu().detach().numpy())
 
-    # Calculate the overall validation accuracy
-    overall_val_acc = round(test_acc.item() / len(test_dataset) * 100, 2)
-    if n_high_bio_samples.item() == 0:
-        overall_val_acc_high = 0.0
-    else:
-        overall_val_acc_high = round(
-            high_correct.item() / n_high_bio_samples.item() * 100, 2)
+    # # Calculate the overall validation accuracy
+    # overall_val_acc = round(test_acc.item() / len(test_dataset) * 100, 2)
+    # if n_high_bio_samples.item() == 0:
+    #     overall_val_acc_high = 0.0
+    # else:
+    #     overall_val_acc_high = round(
+    #         high_correct.item() / n_high_bio_samples.item() * 100, 2)
 
-    if n_low_bio_samples.item() == 0:
-        overall_val_acc_low = 0.0
-    else:
-        overall_val_acc_low = round(
-            low_correct.item() / n_low_bio_samples.item() * 100, 2)
+    # if n_low_bio_samples.item() == 0:
+    #     overall_val_acc_low = 0.0
+    # else:
+    #     overall_val_acc_low = round(
+    #         low_correct.item() / n_low_bio_samples.item() * 100, 2)
 
-    # Write the image_paths, predictions and labels to a csv file
-    pred_label_fp = os.path.join(
-        output_dir, f"prediction_labels_from_the_mulitmodal_fusion_model.csv")
-    with open(pred_label_fp, "w") as f:
-        f.write("image_path,prediction,label,correct,confidence\n")
-        for img_path, pred, label, conf in zip(file_path_list, pred_list, label_list, conf_list):
-            f.write(
-                f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
-        # Write overall high, low and total accuracy
-        f.write(
-            f"Low bio correct,{low_correct.item()},{n_low_bio_samples.item()},{overall_val_acc_low}\n")
-        f.write(
-            f"High bio correct,{high_correct.item()},{n_high_bio_samples.item()},{overall_val_acc_high}\n")
-        f.write(
-            f"Overall test accuracy,{test_acc},{len(test_dataset)},{overall_val_acc}\n")
-        f.write(
-            f"Mean test accuracy,,,{(overall_val_acc_low + overall_val_acc_high) / 2}\n")
-    f.close()
+    # # Write the image_paths, predictions and labels to a csv file
+    # pred_label_fp = os.path.join(
+    #     output_dir, f"prediction_labels_from_the_mulitmodal_fusion_model.csv")
+    # with open(pred_label_fp, "w") as f:
+    #     f.write("image_path,prediction,label,correct,confidence\n")
+    #     for img_path, pred, label, conf in zip(file_path_list, pred_list, label_list, conf_list):
+    #         f.write(
+    #             f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
+    #     # Write overall high, low and total accuracy
+    #     f.write(
+    #         f"Low bio correct,{low_correct.item()},{n_low_bio_samples.item()},{overall_val_acc_low}\n")
+    #     f.write(
+    #         f"High bio correct,{high_correct.item()},{n_high_bio_samples.item()},{overall_val_acc_high}\n")
+    #     f.write(
+    #         f"Overall test accuracy,{test_acc},{len(test_dataset)},{overall_val_acc}\n")
+    #     f.write(
+    #         f"Mean test accuracy,,,{(overall_val_acc_low + overall_val_acc_high) / 2}\n")
+    # f.close()
