@@ -130,11 +130,11 @@ if __name__ == "__main__":
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
+    # train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
-    val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
+    # val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     """
     Training
@@ -387,14 +387,12 @@ if __name__ == "__main__":
     if n_high_bio_samples_test.item() == 0:
         overall_val_acc_high = 0.0
     else:
-        overall_val_acc_high = round(
-            high_correct_test.item() / n_high_bio_samples_test.item() * 100, 2)
+        overall_val_acc_high = round(high_correct_test.item() / n_high_bio_samples_test.item() * 100, 2)
 
     if n_low_bio_samples_test.item() == 0:
         overall_val_acc_low = 0.0
     else:
-        overall_val_acc_low = round(
-            low_correct_test.item() / n_low_bio_samples_test.item() * 100, 2)
+        overall_val_acc_low = round(low_correct_test.item() / n_low_bio_samples_test.item() * 100, 2)
 
     # Write the image_paths, predictions and labels to a csv file
     pred_label_fp = os.path.join(cfg.experiment_dir, f"test_prediction_labels.csv")
