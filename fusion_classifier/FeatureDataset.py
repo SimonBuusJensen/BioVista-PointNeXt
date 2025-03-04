@@ -53,11 +53,15 @@ class FeatureDataset(Dataset):
         feature_file_2D = os.path.join(
             self.feature_dir_2D, feature_file_name_2D.replace(".png", ".npy"))
         features_2D = np.load(feature_file_2D)
-
+        if len(features_2D.shape) == 2:
+            features_2D = features_2D[0]
+        
         feature_file_name_3D = laz_file_name_from_csv_dataset_row_2(row)
         feature_file_3D = os.path.join(
             self.feature_dir_3D, feature_file_name_3D.replace(".npz", ".npy"))
         features_3D = np.load(feature_file_3D)
+        if len(features_3D.shape) == 2:
+            features_3D = features_3D[0]
 
         # Concat the 2D and 3D feature vectors
         X = np.concatenate((features_2D, features_3D))

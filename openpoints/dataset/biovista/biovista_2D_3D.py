@@ -117,21 +117,21 @@ class BioVista2D3D(Dataset):
         return point_cloud_array
 
     def file_name_from_row(self, row):
-        id = row["sample_id"]
+        sample_id = row["sample_id"]
         ogc_fid = row["ogc_fid"]
         year = row["year"]
         class_name = row["class_name"].replace(" ", "_").lower()
-        return f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}"
+        return f"{class_name}_{year}_ogc_fid_{ogc_fid}_{sample_id}"
 
     def als_file_name_from_row(self, row):
-        id = row["sample_id"]
+        sample_id = row["sample_id"]
         ogc_fid = row["ogc_fid"]
         year = row["year"]
         class_name = row["class_name"].replace(" ", "_").lower()
         if self.format == 'npz':
-            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.npz"
+            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{sample_id}_30m.npz"
         else:
-            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{id}_30m.laz"
+            fn = f"{class_name}_{year}_ogc_fid_{ogc_fid}_{sample_id}_30m.laz"
         return fn
     
     def orthophoto_file_name_from_row(self, row, is_nir=False):
