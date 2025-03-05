@@ -213,9 +213,12 @@ if __name__ == "__main__":
         # Calculate the accuracy and overall accuracy
         train_loss = loss_meter.avg
         train_macc, train_oacc, accs = train_cm.all_acc()
-        fusion_lr = optimizer.param_groups[2]['lr']
         if args.backbone_lr > 0:
             backbone_lr = optimizer.param_groups[0]['lr']
+            fusion_lr = optimizer.param_groups[2]['lr']
+        else:
+            backbone_lr = 0
+            fusion_lr = optimizer.param_groups[0]['lr']
         
         if args.use_wandb:
             wandb.log({
@@ -223,7 +226,7 @@ if __name__ == "__main__":
                 "train_macc": train_macc,
                 "train_oacc": train_oacc,
                 "fusion_lr": fusion_lr,
-                "backbone_lr": backbone_lr if args.backbone_lr > 0 else 0,
+                "backbone_lr": backbone_lr,
                 "epoch": epoch
             })
 
