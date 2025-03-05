@@ -35,12 +35,12 @@ def setup_logger(log_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file',
-                        default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
-                        # default="cfgs/biovista/pointvector-s.yaml")
+                        # default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
+                        default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                        # default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
-                        default="/workspace/datasets/samples.csv")
+                        # default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
                         default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
