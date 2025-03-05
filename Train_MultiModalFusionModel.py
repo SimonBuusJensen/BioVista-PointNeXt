@@ -35,12 +35,12 @@ def setup_logger(log_file):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file',
-                        # default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
-                        default="cfgs/biovista/pointvector-s.yaml")
+                        default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
+                        # default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                        default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        # default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
-                        # default="/workspace/datasets/samples.csv")
+                        default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
                         default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
@@ -56,8 +56,8 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=5)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
-    parser.add_argument("--backbone_lr", type=float, help="Learning rate", default=None)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
+    parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0)
     
     # General arguments
     parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
     # train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
@@ -147,21 +147,29 @@ if __name__ == "__main__":
     cfg.num_workers = args.num_workers
     if cfg.num_workers == 0:
         logging.warning("The number of workers is set to 0, which may slow down the training process.")
+    
     cfg.fusion_lr = args.fusion_lr
     assert cfg.fusion_lr is not None, "The fusion learning rate must be provided."
-    
-    if args.backbone_lr is None:
-        cfg.backbone_lr = cfg.fusion_lr * 0.1
-    else:
-        cfg.backbone_lr = args.backbone_lr
-
+    cfg.backbone_lr = args.backbone_lr
+    assert cfg.backbone_lr is not None, "The backbone learning rate must be provided."
     
     # optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
-    optimizer = torch.optim.AdamW([
-        {"params": model.image_backbone.parameters(), "lr": cfg.backbone_lr},
-        {"params": model.point_backbone.parameters(), "lr": cfg.backbone_lr},
-        {"params": model.fusion_head.parameters(), "lr": cfg.fusion_lr},
-    ], weight_decay=1e-2)  # Default weight decay is 1e-2
+    if args.backbone_lr > 0:
+        optimizer = torch.optim.AdamW([
+            {"params": model.image_backbone.parameters(), "lr": cfg.backbone_lr},
+            {"params": model.point_backbone.parameters(), "lr": cfg.backbone_lr},
+            {"params": model.fusion_head.parameters(), "lr": cfg.fusion_lr},
+        ], weight_decay=1e-2)  # Default weight decay is 1e-2
+    else:
+        optimizer = torch.optim.AdamW([
+            {"params": model.fusion_head.parameters(), "lr": cfg.fusion_lr},
+        ], weight_decay=1e-2)
+        
+        for param in model.image_backbone.parameters():
+            param.requires_grad = False
+        for param in model.point_backbone.parameters():
+            param.requires_grad = False
+
 
     scheduler = build_scheduler_from_cfg(cfg, optimizer)
     criterion_args = {'NAME': 'CrossEntropy', 'label_smoothing': 0.2}

@@ -27,53 +27,49 @@ import pandas as pd
 import os
 
 
-csv_file = "/home/simon/Downloads/all-pointvector-als-experiments.csv"
-# csv_file = "/home/simon/Downloads/wandb_export_2025-02-06T12_14_13.495+01_00.csv"
+# csv_file = "/home/simon/Downloads/all-pointvector-als-experiments.csv"
+csv_file = "/home/simon/Downloads/BioVista-Multimodal-MLP-Fusion-Hyperparameter-Search_v1.csv"
+
 df = pd.read_csv(csv_file)
 
 # Filter the dataframe
 filtered_df = df[
     # (df['project_name'] == 'BioVista-Hyperparameter-Search-v2') &
-    (df['channels'] == 'xyzh') &
-    (df['num_points'] == 16384) &
+    # (df['channels'] == 'xyzh') &
+    # (df['num_points'] == 16384) &
     # (df['num_points'] == 24576) &
-    (df['qb_radius'] == 0.65) &
-    (df['qb_radius_scaling'] == 1.5) &
-    (df['with_class_weights'] == False) &
-    (df['with_point_cloud_jitter'] == False) &
-    (df['with_point_cloud_rotations'] == False) &
-    (df['with_point_cloud_scaling'] == False) &
-    (df['with_normalize_gravity_dim'] == False) &
+    # (df['qb_radius'] == 0.65) &
+    # (df['qb_radius_scaling'] == 1.5) &
+    # (df['with_class_weights'] == False) &
+    # (df['with_point_cloud_jitter'] == False) &
+    # (df['with_point_cloud_rotations'] == False) &
+    # (df['with_point_cloud_scaling'] == False) &
+    # (df['with_normalize_gravity_dim'] == False) &
     # (df['with_normalize_intensity'] == True) &
     # (df['normalize_intensity_scale'] == 1) &
-    (df['lr'] == 0.0001)  & 
-    (df['batch_size'] == 8)
+    (df['fusion_lr'] == 0.00001)  
+    # (df['lr'] == 0.0001)  &
+    # (df['batch_size'] == 12)
 ]
 
 # Sort by test_oa
-filtered_df = filtered_df.sort_values(by='test_oa', ascending=False)
+filtered_df = filtered_df.sort_values(by='test_oacc', ascending=False)
 
 # Print the filtered dataframe
 print(filtered_df)
 
+print("Val OAcc")
+print(round(filtered_df['best_val_oacc'].mean(), 1))
+print(round(filtered_df['best_val_oacc'].std(), 1))
+# print(round(filtered_df['best_val_oacc'].min(), 1))
+# print(round(filtered_df['best_val_oacc'].max(), 1))
+
 # Print the min, max, mean and std of the test_oacc
 print("Test OACC")
-print(round(filtered_df['test_oa'].mean(), 1))
-print(round(filtered_df['test_oa'].std(), 1))
+print(round(filtered_df['test_oacc'].mean(), 1))
+print(round(filtered_df['test_oacc'].std(), 1))
 # print(round(filtered_df['test_oa'].min(), 1))
 # print(round(filtered_df['test_oa'].max(), 1))
-
-print("Test Acc High")
-print(round(filtered_df['test_accuracy_high'].mean(), 1))
-print(round(filtered_df['test_accuracy_high'].std(), 1))
-# print(round(filtered_df['test_accuracy_high'].min(), 1))
-# print(round(filtered_df['test_accuracy_high'].max(), 1))
-
-print("Test Acc Low")
-print(round(filtered_df['test_accuracy_low'].mean(), 1))
-print(round(filtered_df['test_accuracy_low'].std(), 1))
-# print(round(filtered_df['test_accuracy_low'].min(), 1))
-# print(round(filtered_df['test_accuracy_low'].max(), 1))
 
 print("Test MAcc")
 print(round(filtered_df['test_macc'].mean(), 1))
@@ -81,9 +77,18 @@ print(round(filtered_df['test_macc'].std(), 1))
 # print(round(filtered_df['test_macc'].min(), 1))
 # print(round(filtered_df['test_macc'].max(), 1))
 
-print("Val OAcc")
-print(round(filtered_df['best_val_oacc'].mean(), 1))
-print(round(filtered_df['best_val_oacc'].std(), 1))
-# print(round(filtered_df['best_val_oacc'].min(), 1))
-# print(round(filtered_df['best_val_oacc'].max(), 1))
+print("Test Acc High")
+print(round(filtered_df['test_high_bio_acc'].mean(), 1))
+print(round(filtered_df['test_high_bio_acc'].std(), 1))
+# print(round(filtered_df['test_accuracy_high'].min(), 1))
+# print(round(filtered_df['test_accuracy_high'].max(), 1))
+
+print("Test Acc Low")
+print(round(filtered_df['test_low_bio_acc'].mean(), 1))
+print(round(filtered_df['test_low_bio_acc'].std(), 1))
+# print(round(filtered_df['test_accuracy_low'].min(), 1))
+# print(round(filtered_df['test_accuracy_low'].max(), 1))
+
+
+
 
