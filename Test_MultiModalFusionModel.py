@@ -49,6 +49,29 @@ class ResNetClassifier(nn.Module):
             x = self.resnet.avgpool(x)
             features = torch.flatten(x, 1)
             return features
+        
+    def get_all_feature_encodings(self, x):
+
+        x = self.resnet.conv1(x)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+        x = self.resnet.layer1(x)
+
+        x = self.resnet.layer2(x)
+        features_128 = self.resnet.avgpool(x)
+        features_128 = torch.flatten(features_128, 1)
+
+        x = self.resnet.layer3(x)
+        features_256 = self.resnet.avgpool(x)
+        features_256 = torch.flatten(features_256, 1)
+
+        x = self.resnet.layer4(x)
+        features_512 = self.resnet.avgpool(x)
+        features_512 = torch.flatten(features_512, 1)
+        return [features_128, features_256, features_512]
+
+        
 
 
 class MLPModel(nn.Module):
@@ -155,10 +178,20 @@ class MultiModalFusionModel(nn.Module):
         # Extract Features from the input image using the ResNet-18 backbone.
         image_features = self.image_backbone.get_feature_encodings(image)
         return image_features
+    
+    def forward_all_2D_feature_encodings(self, image):
+        # Extract Features from the input image using the ResNet-18 backbone.
+        image_features = self.image_backbone.get_all_feature_encodings(image)
+        return image_features
 
     def forward_3D_feature_encodings(self, point_cloud):
         # Extract Features from the 3D point cloud using the PointVector-S backbone.
         point_features = self.point_backbone.encoder.forward_cls_feat(point_cloud)
+        return point_features
+    
+    def forward_all_3D_feature_encodings(self, point_cloud):
+        # Extract Features from the 3D point cloud using the PointVector-S backbone.
+        point_features = self.point_backbone.encoder.forward_all_cls_feat(point_cloud)
         return point_features
 
     def forward_2D_predictions(self, image):

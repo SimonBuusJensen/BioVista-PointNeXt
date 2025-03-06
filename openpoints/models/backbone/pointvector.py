@@ -632,6 +632,21 @@ class PointVectorEncoder(nn.Module):
             # print first 10 elements of p0 and f0
             # print(f"{i}:\nf0 channel 1: {f0[0, 0, :2].cpu().numpy()}\nf0 channel 2: {f0[0, 1, :2].cpu().numpy()}\nf0 channel 3: {f0[0, 2, :2].cpu().numpy()}\nf0 channel 4: {f0[0, 3, :2].cpu().numpy()}")
         return f0.squeeze(-1)
+    
+    def forward_all_cls_feat(self, p0, f0=None):
+        all_features = []
+        if hasattr(p0, 'keys'):
+            p0, f0 = p0['pos'], p0.get('x', None)
+        if f0 is None:
+            f0 = p0.clone().transpose(1, 2).contiguous()
+        # print(f"Pre:\nf0 channel 1: {f0[0, 0, :2].cpu().numpy()}\nf0 channel 2: {f0[0, 1, :2].cpu().numpy()}\nf0 channel 3: {f0[0, 2, :2].cpu().numpy()}\nf0 channel 4: {f0[0, 3, :2].cpu().numpy()}")
+        for i in range(0, len(self.encoder)):
+            p0, f0 = self.encoder[i]([p0, f0])
+            # print first 10 elements of p0 and f0
+            # print(f"{i}:\nf0 channel 1: {f0[0, 0, :2].cpu().numpy()}\nf0 channel 2: {f0[0, 1, :2].cpu().numpy()}\nf0 channel 3: {f0[0, 2, :2].cpu().numpy()}\nf0 channel 4: {f0[0, 3, :2].cpu().numpy()}")
+            all_features.append(f0)
+        return all_features
+        # return f0.squeeze(-1)
 
     def forward_seg_feat(self, p0, f0=None):
         if hasattr(p0, 'keys'):

@@ -7,6 +7,7 @@ import sys
 import wandb
 import numpy as np
 import torch.nn as nn
+from collections import Counter
 from torch.utils.data import DataLoader
 from torchvision.models import resnet18
 from datetime import datetime
@@ -31,16 +32,31 @@ def setup_logger(log_file):
     )
     return logging.getLogger()
 
+def calculate_class_weights(labels):
+    # Count the occurrence of each class
+    class_counts = Counter(labels)
+    total_count = sum(class_counts.values())
+
+    # Inverse of frequency
+    class_weights = {cls: total_count /
+                     count for cls, count in class_counts.items()}
+
+    # Convert to a tensor
+    class_weights_tensor = torch.tensor(
+        [class_weights[i] for i in sorted(class_weights.keys())], dtype=torch.float)
+    return class_weights_tensor
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file',
-                        # default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
-                        default="cfgs/biovista/pointvector-s.yaml")
+                        default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
+                        # default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                        default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        # default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
-                        # default="/workspace/datasets/samples.csv")
+                        default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
                         default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
@@ -58,6 +74,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0)
+    parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=False)
+    parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weighted loss", default=True)
     
     # General arguments
     parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
@@ -82,7 +100,8 @@ if __name__ == "__main__":
     assert isinstance(args.project_name, str), "The project_name must be a string."
     cfg.project_name = args.project_name
     date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    experiment_name = f"{date_now_str}-{cfg.project_name}"
+    unique_id = np.random.randint(1000, 9999)
+    experiment_name = f"{date_now_str}-{unique_id}-{cfg.project_name}"
     
     # Setup output dir for the experiment to save log, models, test results, etc.
     cfg.experiment_dir = os.path.join(os.path.dirname(args.source), "experiments", "2D-3D-Fusion", "MLP-Fusion-Active", cfg.project_name, experiment_name)
@@ -102,6 +121,8 @@ if __name__ == "__main__":
         wandb.save(log_file)
         
     # Model arguments
+    with_shortcut_fusion = args.with_shortcut_fusion
+    assert isinstance(with_shortcut_fusion, bool), "The with_shortcut_fusion must be a boolean."
     cfg.model.encoder_args.in_channels = 4  # xyzh
     cfg.model.encoder_args.radius = 0.65
     cfg.model.encoder_args.radius_scaling = 1.5
@@ -170,11 +191,18 @@ if __name__ == "__main__":
         for param in model.point_backbone.parameters():
             param.requires_grad = False
 
-
     scheduler = build_scheduler_from_cfg(cfg, optimizer)
-    criterion_args = {'NAME': 'CrossEntropy', 'label_smoothing': 0.2}
-    criterion = build_criterion_from_cfg(criterion_args)
+    with_class_weights = args.with_class_weights
+    if with_class_weights:
+        train_labels = train_dataset.df["class_id"].values
+        class_weights = calculate_class_weights(train_labels)
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weights.to(device))
+    else:
+        criterion = torch.nn.CrossEntropyLoss().to(device)
+
     best_val_overall_acc = 0.0
+    patience = 8 # Early stopping patience (will stop training if the validation accuracy does not improve after this number of epochs)
+    epochs_without_improvement = 0
     model.train()  # set model to training mode
     
     for epoch in range(1, cfg.epochs + 1):
@@ -193,9 +221,14 @@ if __name__ == "__main__":
             data['x'] = points[:, :, :cfg.model.encoder_args.in_channels].transpose(1, 2).contiguous()
             
             # Forward pass
-            _2D_features = model.forward_2D_feature_encodings(data['img'])
-            _3D_features = model.forward_3D_feature_encodings(data)
-            features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
+            if with_shortcut_fusion:
+                _2D_features_list = model.forward_all_2D_feature_encodings(data['img'])
+                _3D_features_list = model.forward_all_3D_feature_encodings(data)
+            else:
+        
+                _2D_features = model.forward_2D_feature_encodings(data['img'])
+                _3D_features = model.forward_3D_feature_encodings(data)
+                features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
             
             logits = model.forward_MLP_predictions(features_2D_3D)
             loss = criterion(logits, target)
@@ -237,7 +270,6 @@ if __name__ == "__main__":
             class_correct_train = train_cm.tp[class_idx].item()
             class_acc_train = (class_correct_train / class_total_train) * 100 if class_total_train > 0 else 0
             logging.info(f"Train: class {train_dataset.classes[class_idx]} (id: {class_idx}) correct: {class_correct_train}/{class_total_train} ({class_acc_train:.1f}%)")
-    
     
         """
         VALIDATION
@@ -326,6 +358,11 @@ if __name__ == "__main__":
                     f.write(f"Overall validation accuracy,{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{best_val_overall_acc}\n")
                     f.write(f"Mean validation accuracy,,,{val_macc}\n")
                 f.close()
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= patience:
+                    logging.info(f"Early stopping after {patience} epochs without improvement.")
+                    break
                 
             if cfg.wandb.use_wandb:
                 wandb.save(pred_label_fp)

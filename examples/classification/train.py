@@ -105,10 +105,10 @@ def main(gpu, cfg):
     if not cfg.model.get('criterion_args', False):
         cfg.model.criterion_args = cfg.criterion_args
         
-    # if cfg.cls_weighed_loss:
-    #     cfg.model.criterion_args.weight = calculate_class_weights(train_loader.dataset.df['class_id'].values)
-    #     logging.info('Using class weighted loss')
-    #     logging.info(f"Weight: {cfg.model.criterion_args.weight}")
+    if cfg.cls_weighed_loss:
+        cfg.model.criterion_args.weight = calculate_class_weights(train_loader.dataset.df['class_id'].values)
+        logging.info('Using class weighted loss')
+        logging.info(f"Weight: {cfg.model.criterion_args.weight}")
         
     model = build_model_from_cfg(cfg.model).to(cfg.rank)
     model_size = cal_model_parm_nums(model)
