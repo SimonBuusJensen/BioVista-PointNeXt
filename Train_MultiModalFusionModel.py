@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion/Baseline-Frozen/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
-    parser.add_argument('--seed', type=int, help='Random seed', default=42)
+    parser.add_argument('--seed', type=int, help='Random seed', default=None)
     
     # Training arguments
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=5)
@@ -76,6 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0)
     parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=False)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weighted loss", default=True)
+    # parser.add_argument("--with_accumulation", type=str2bool, help="Whether to use gradient accumulation", default=True)
     
     # General arguments
     parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
@@ -85,6 +86,8 @@ if __name__ == "__main__":
     cfg = EasyConfig()
     cfg.load(args.cfg, recursive=True)
     cfg.update(opts)
+
+    experiment_id = np.random.randint(1000, 9999)
     
     # Set the seed
     if args.seed is not None:
@@ -100,8 +103,7 @@ if __name__ == "__main__":
     assert isinstance(args.project_name, str), "The project_name must be a string."
     cfg.project_name = args.project_name
     date_now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    unique_id = np.random.randint(1000, 9999)
-    experiment_name = f"{date_now_str}-{unique_id}-{cfg.project_name}"
+    experiment_name = f"{date_now_str}-{experiment_id}-{cfg.project_name}"
     
     # Setup output dir for the experiment to save log, models, test results, etc.
     cfg.experiment_dir = os.path.join(os.path.dirname(args.source), "experiments", "2D-3D-Fusion", "MLP-Fusion-Active", cfg.project_name, experiment_name)
@@ -110,15 +112,6 @@ if __name__ == "__main__":
     # Init logger
     log_file = os.path.join(cfg.experiment_dir, f"{experiment_name}.log")
     setup_logger(log_file) 
-
-    # Setup wandb
-    assert isinstance(args.use_wandb, bool), "The use_wandb must be a boolean."
-    if args.use_wandb and cfg.mode == "train":
-        cfg.wandb.use_wandb = True
-        cfg.wandb.project = cfg.project_name
-        wandb.init(project=cfg.wandb.project, name=experiment_name)
-        wandb.config.update(args)
-        wandb.save(log_file)
         
     # Model arguments
     with_shortcut_fusion = args.with_shortcut_fusion
@@ -147,24 +140,40 @@ if __name__ == "__main__":
     # resnet_model_weights = "/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth"
     model.load_weights(resnet_weights_path=resnet_model_weights, pointvector_weights_path=pointvector_weights, mlp_weights_path=None, map_location=device)
     model.to(device)
-
+    
+    cfg.batch_size = args.batch_size
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
-    train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform, seed=cfg.seed)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
+    train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform)
+    train_loader = DataLoader(train_dataset, 
+                              batch_size=cfg.batch_size, 
+                              shuffle=True, 
+                              num_workers=args.num_workers, 
+                              drop_last=True)
     # train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
     
-    val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform, seed=cfg.seed)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform)
+    val_loader = DataLoader(val_dataset, 
+                            batch_size=cfg.batch_size, 
+                            shuffle=False, 
+                            num_workers=args.num_workers)
     # val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
     
+    # Setup wandb
+    assert isinstance(args.use_wandb, bool), "The use_wandb must be a boolean."
+    if args.use_wandb:
+        cfg.wandb.use_wandb = True
+        cfg.wandb.project = cfg.project_name
+        wandb.init(project=cfg.wandb.project, name=experiment_name)
+        wandb.config.update(args)
+        wandb.save(log_file)
+
     """
     Training
     """
     # Training arguments
     cfg.epochs = args.epochs
-    cfg.batch_size = args.batch_size
     cfg.num_workers = args.num_workers
     if cfg.num_workers == 0:
         logging.warning("The number of workers is set to 0, which may slow down the training process.")
@@ -210,6 +219,8 @@ if __name__ == "__main__":
         loss_meter = AverageMeter()
         train_cm = ConfusionMatrix(num_classes=cfg.num_classes)
         for idx, (fn, data) in train_pbar:
+
+            optimizer.zero_grad()
             
             for key in data.keys():
                 data[key] = data[key].cuda(non_blocking=True)
@@ -232,13 +243,9 @@ if __name__ == "__main__":
             
             logits = model.forward_MLP_predictions(features_2D_3D)
             loss = criterion(logits, target)
-            
             loss.backward()
-            
-            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_norm_clip, norm_type=2)    
             optimizer.step()
-            model.zero_grad()
-        
+                
             # update confusion matrix
             train_cm.update(logits.argmax(dim=1), target)
             loss_meter.update(loss.item())
@@ -325,6 +332,7 @@ if __name__ == "__main__":
             
             # check if the current model is the best model
             is_best = val_overall_acc > best_val_overall_acc
+
             if is_best:
                 best_val_overall_acc = val_overall_acc
                 best_epoch = epoch
@@ -376,7 +384,7 @@ if __name__ == "__main__":
         scheduler.step(epoch)
 
     test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
     # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
     logging.info("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 

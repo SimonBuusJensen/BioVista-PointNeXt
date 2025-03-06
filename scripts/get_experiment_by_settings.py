@@ -28,7 +28,7 @@ import os
 
 
 # csv_file = "/home/simon/Downloads/all-pointvector-als-experiments.csv"
-csv_file = "/home/simon/Downloads/BioVista-Multimodal-MLP-Fusion-Hyperparameter-Search_v1.csv"
+csv_file = "/home/simon/Downloads/BioVista-Multimodal-MLP-Fusion-Hyperparameter-Search_v2.csv"
 
 df = pd.read_csv(csv_file)
 
@@ -47,7 +47,8 @@ filtered_df = df[
     # (df['with_normalize_gravity_dim'] == False) &
     # (df['with_normalize_intensity'] == True) &
     # (df['normalize_intensity_scale'] == 1) &
-    (df['fusion_lr'] == 0.00001)  
+    (df['fusion_lr'] == 0.0001)  &
+    (df['backbone_lr'] == 0)  
     # (df['lr'] == 0.0001)  &
     # (df['batch_size'] == 12)
 ]

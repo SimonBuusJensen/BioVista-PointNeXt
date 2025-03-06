@@ -222,7 +222,6 @@ class BioVista2D3D(Dataset):
             points = np.concatenate([points, points[indices, :]], axis=0)
         return points
     
-
     def get_orthophoto_by_row(self, row):
         
         # Check if the RGB orthophoto exists
