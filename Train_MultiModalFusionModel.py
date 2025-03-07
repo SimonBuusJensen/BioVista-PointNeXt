@@ -70,13 +70,12 @@ if __name__ == "__main__":
     
     # Training arguments
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=5)
-    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--batch_size", type=int, help="Batch size for training", default=64)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0)
     parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=False)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weighted loss", default=True)
-    # parser.add_argument("--with_accumulation", type=str2bool, help="Whether to use gradient accumulation", default=True)
     
     # General arguments
     parser.add_argument("--use_wandb", type=str2bool, help="Whether to log to weights and biases", default=True)
@@ -142,6 +141,17 @@ if __name__ == "__main__":
     model.to(device)
     
     cfg.batch_size = args.batch_size
+
+    # In case batch size is greater than 8 we use gradient accumulation
+    # This technique lets us simulate a larger batch size by accumulating gradients over multiple iterations
+    if cfg.batch_size > 8:
+        assert cfg.batch_size % 8 == 0, "The batch size must be a multiple of 8."
+        with_accumulation = True
+        accumulation_steps = cfg.batch_size // 8
+        cfg.batch_size = 8
+    else:
+        with_accumulation = False
+
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
@@ -218,10 +228,9 @@ if __name__ == "__main__":
         train_pbar = tqdm(enumerate(train_loader), total=train_loader.__len__(), desc=f"Train Epoch [{epoch}/{cfg.epochs}]")
         loss_meter = AverageMeter()
         train_cm = ConfusionMatrix(num_classes=cfg.num_classes)
-        for idx, (fn, data) in train_pbar:
 
-            optimizer.zero_grad()
-            
+        for idx, (fn, data) in train_pbar:
+                        
             for key in data.keys():
                 data[key] = data[key].cuda(non_blocking=True)
         
@@ -243,13 +252,26 @@ if __name__ == "__main__":
             
             logits = model.forward_MLP_predictions(features_2D_3D)
             loss = criterion(logits, target)
+
+            # Dividing the loss by the accumulation steps keeps the scale of the gradients similar to what you would expect from a full batch
+            if with_accumulation:
+                loss = loss / accumulation_steps
+
             loss.backward()
-            optimizer.step()
+
+            if with_accumulation:
+                if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(train_loader):
+                    optimizer.step()
+                    optimizer.zero_grad()
+            else:
+                optimizer.step()
+                optimizer.zero_grad()
                 
             # update confusion matrix
             train_cm.update(logits.argmax(dim=1), target)
             loss_meter.update(loss.item())
-        
+    
+
         # Calculate the accuracy and overall accuracy
         train_loss = loss_meter.avg
         train_macc, train_oacc, accs = train_cm.all_acc()
@@ -334,6 +356,7 @@ if __name__ == "__main__":
             is_best = val_overall_acc > best_val_overall_acc
 
             if is_best:
+                epochs_without_improvement = 0
                 best_val_overall_acc = val_overall_acc
                 best_epoch = epoch
                 logging.info(f"Best model found at epoch {epoch}, saving model...")
