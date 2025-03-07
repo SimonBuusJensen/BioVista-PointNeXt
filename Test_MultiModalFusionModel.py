@@ -75,34 +75,29 @@ class ResNetClassifier(nn.Module):
 
 
 class MLPModel(nn.Module):
-    def __init__(self, input_size=1024, output_size=2, option=3, dropout_rate=0.0):
+    def __init__(self, input_size=1024, output_size=2, dropout_rate=0.0, shortcut_fusion=False, fusion_type="concat"):
         super(MLPModel, self).__init__()
 
-        if option == 1:
-            hidden_sizes = [512]  # Simple
-        elif option == 2:
-            hidden_sizes = [512, 256]  # Deeper
-        elif option == 3:
-            hidden_sizes = [1024, 512, 256]  # Most expressive
-        else:
-            raise ValueError("Invalid option. Choose 1, 2, or 3.")
+        self.shortcut_fusion = shortcut_fusion
+        self.fusion_type = fusion_type
 
-        layers = []
+        hidden_sizes = [1024, 512, 256]
+        self.layers = []
         in_features = input_size
 
         for hidden_size in hidden_sizes:
-            layers.append(nn.Linear(in_features, hidden_size))
-            layers.append(nn.ReLU())
+            self.layers.append(nn.Linear(in_features, hidden_size))
+            self.layers.append(nn.ReLU())
+            self.layers.append(nn.BatchNorm1d(hidden_size))
             # Normalization for stability
-            layers.append(nn.BatchNorm1d(hidden_size))
             if dropout_rate > 0:
-                layers.append(nn.Dropout(dropout_rate))  # Prevent overfitting
+                self.layers.append(nn.Dropout(dropout_rate))  # Prevent overfitting
 
             in_features = hidden_size  # Set input size for next layer
 
         # Final output layer
-        layers.append(nn.Linear(in_features, output_size))
-        self.model = nn.Sequential(*layers)
+        self.layers.append(nn.Linear(in_features, output_size))
+        self.model = nn.Sequential(*self.layers)
 
     def forward(self, x):
         return self.model(x)
@@ -111,8 +106,15 @@ class MLPModel(nn.Module):
 class MultiModalFusionModel(nn.Module):
     def __init__(self,
                  num_classes=2,
-                 fusion_input_size=1024):
+                 fusion_input_size=1024,
+                 with_shortcut_fusion=False,
+                 fusion_type="concat"
+                 ):
         super(MultiModalFusionModel, self).__init__()
+
+        self.with_shortcut_fusion = with_shortcut_fusion
+        self.fusion_type = fusion_type
+
         # Instantiate image backbone.
         # Note: Here we use get_feature_encodings to get a feature vector.
         # You might need to adjust the final feature dimension.
@@ -151,23 +153,37 @@ class MultiModalFusionModel(nn.Module):
         # For example, if both backbones output 512-d features, then 512 + 512 = 1024.
         self.fusion_head = MLPModel(input_size=fusion_input_size,
                                     output_size=num_classes,
-                                    option=3,
-                                    dropout_rate=0.0)
+                                    dropout_rate=0.0,
+                                    shortcut_fusion=with_shortcut_fusion,
+                                    fusion_type=self.fusion_type)
 
     def forward(self, data):
-        # Extract image features. (Assume image is (B, C, H, W))
-        image_features = self.image_backbone.get_feature_encodings(data['img'])
 
-        # Extract point cloud features.
-        # Here we use forward_cls_feat; ensure your point cloud data is in the expected format.
-        point_features = self.point_backbone.encoder.forward_cls_feat(data)
+        if self.with_shortcut_fusion:
+            # Multi-scale feature extraction and fusion
+            img_features_list = self.image_backbone.get_all_feature_encodings(data['img'])
+            pc_features_list = self.point_backbone.encoder.forward_all_cls_feat(data)
+            
+            # Fuse features at each scale
+            fused_256 = torch.cat([img_features_list[0], pc_features_list[0]], dim=1)
+            fused_512 = torch.cat([img_features_list[1], pc_features_list[1]], dim=1)
+            fused_1024 = torch.cat([img_features_list[2], pc_features_list[2]], dim=1)
+            out = self.fusion_head([fused_1024, fused_512, fused_256])
 
-        # Concatenate features along the feature dimension.
-        fused_features = torch.cat([image_features, point_features], dim=1)
+        else:
+            # Extract image features. (Assume image is (B, C, H, W))
+            image_features = self.forward_2D_feature_encodings(data['img'])
 
-        # Pass the fused vector through the MLP fusion head.
-        out = self.fusion_head(fused_features)
-        return out
+            # Extract point cloud features.
+            # Here we use forward_cls_feat; ensure your point cloud data is in the expected format.
+            point_features = self.forward_3D_feature_encodings(data)
+
+            # Concatenate features along the feature dimension.
+            fused_features = torch.cat([image_features, point_features], dim=1)
+
+            # Pass the fused vector through the MLP fusion head.
+            out = self.fusion_head(fused_features)
+            return out
     
     def forward_MLP_predictions(self, features_2D_3D):
         # Forward pass through the MLP model

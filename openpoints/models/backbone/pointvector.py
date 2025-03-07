@@ -634,19 +634,55 @@ class PointVectorEncoder(nn.Module):
         return f0.squeeze(-1)
     
     def forward_all_cls_feat(self, p0, f0=None):
-        all_features = []
+        """
+        Extracts features from intermediate layers of the encoder using average pooling.
+        Returns a list of three feature tensors with similar structure to ResNet's
+        features_128, features_256, and features_512.
+        
+        Args:
+            p0: Point coordinates or dictionary containing 'pos' and optionally 'x'
+            f0: Optional input features
+            
+        Returns:
+            List of feature tensors [features_128, features_256, features_512]
+        """
         if hasattr(p0, 'keys'):
             p0, f0 = p0['pos'], p0.get('x', None)
         if f0 is None:
             f0 = p0.clone().transpose(1, 2).contiguous()
-        # print(f"Pre:\nf0 channel 1: {f0[0, 0, :2].cpu().numpy()}\nf0 channel 2: {f0[0, 1, :2].cpu().numpy()}\nf0 channel 3: {f0[0, 2, :2].cpu().numpy()}\nf0 channel 4: {f0[0, 3, :2].cpu().numpy()}")
-        for i in range(0, len(self.encoder)):
-            p0, f0 = self.encoder[i]([p0, f0])
-            # print first 10 elements of p0 and f0
-            # print(f"{i}:\nf0 channel 1: {f0[0, 0, :2].cpu().numpy()}\nf0 channel 2: {f0[0, 1, :2].cpu().numpy()}\nf0 channel 3: {f0[0, 2, :2].cpu().numpy()}\nf0 channel 4: {f0[0, 3, :2].cpu().numpy()}")
-            all_features.append(f0)
-        return all_features
-        # return f0.squeeze(-1)
+        
+        # Create an adaptive average pooling layer for point cloud features
+        # This is 1D since our features are (B, C, N)
+        adaptive_pool = nn.AdaptiveAvgPool1d(1)
+        
+        # Track intermediate features
+        intermediate_features = []
+        
+        # Run through each encoder layer
+        p, f = p0, f0
+        for i in range(len(self.encoder)):
+            p, f = self.encoder[i]([p, f])
+            
+            # Capture features from layers 3 and 4 (indices 2 and 3)
+            if i == 2:  # Layer 3 with 128 channels
+                # Apply adaptive avg pooling to get [B x 128 x 1]
+                features_128 = adaptive_pool(f)
+                features_128 = torch.flatten(features_128, 1)
+                intermediate_features.append(features_128)
+            elif i == 3:  # Layer 4 with 256 channels
+                # Apply adaptive avg pooling to get [B x 256 x 1]
+                features_256 = adaptive_pool(f)
+                features_256 = torch.flatten(features_256, 1)
+                intermediate_features.append(features_256)
+        
+        # Final features (512 channels)
+        features_512 = f.squeeze(-1)
+        
+        # Add the final features
+        intermediate_features.append(features_512)
+        
+        return intermediate_features
+        
 
     def forward_seg_feat(self, p0, f0=None):
         if hasattr(p0, 'keys'):
