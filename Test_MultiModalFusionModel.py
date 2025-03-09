@@ -1,6 +1,7 @@
 import argparse
 import torch
 import os
+import logging 
 import numpy as np
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -82,6 +83,7 @@ class MLPModel(nn.Module):
         self.fusion_type = fusion_type
 
         if self.shortcut_fusion and self.fusion_type == "concat":
+            logging.info("Shortcut fusion with concat")
             hidden_sizes = [512, 256, 256]
             self.layer_groups = []
             
@@ -161,6 +163,7 @@ class MultiModalFusionModel(nn.Module):
         super(MultiModalFusionModel, self).__init__()
 
         self.with_shortcut_fusion = with_shortcut_fusion
+        logging.info(f"Shortcut fusion: {self.with_shortcut_fusion}")
         self.fusion_type = fusion_type
 
         # Instantiate image backbone.

@@ -51,12 +51,12 @@ def calculate_class_weights(labels):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file',
-                        default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
-                        # default="cfgs/biovista/pointvector-s.yaml")
+                        # default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
+                        default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
-                        # default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
+                        default="/home/create.aau.dk/fd78da/datasets/BioVista/Forest-Biodiversity-Potential/samples.csv")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
-                        default="/workspace/datasets/samples.csv")
+                        # default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
                         default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
-    parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0)
+    parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0.000001)
     parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=True)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weighted loss", default=True)
     
@@ -314,12 +314,7 @@ if __name__ == "__main__":
                 data['pos'] = points[:, :, :3].contiguous()
                 data['x'] = points[:, :, :cfg.model.encoder_args.in_channels].transpose(1, 2).contiguous()
                 
-                # Forward pass
-                _2D_features = model.forward_2D_feature_encodings(data['img'])
-                _3D_features = model.forward_3D_feature_encodings(data)
-                features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
-                
-                logits = model.forward_MLP_predictions(features_2D_3D)
+                logits = model(data)
                 val_cm.update(logits.argmax(dim=1), target)
                 
                 # Save the predictions and labels
@@ -429,31 +424,31 @@ if __name__ == "__main__":
             data['pos'] = data['x'][:, :, :3].contiguous()
             data['x'] = data['x'][:, :, :4].transpose(1, 2).contiguous()
 
-            # Forward pass
-            _2D_features = model.forward_2D_feature_encodings(data['img'])
-            _3D_features = model.forward_3D_feature_encodings(data)
-            features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
+            # # Forward pass
+            # _2D_features = model.forward_2D_feature_encodings(data['img'])
+            # _3D_features = model.forward_3D_feature_encodings(data)
+            # features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
             
             # Save the 2D and 3D encodings
-            image_file_name = os.path.basename(fn[0]) + "_30m.png"
-            _2D_feature_dir = os.path.join(cfg.experiment_dir, "resnet_encodings")
-            if not os.path.exists(_2D_feature_dir):
-                os.makedirs(_2D_feature_dir, exist_ok=True)
-            _2D_feature_fp = os.path.join(_2D_feature_dir, image_file_name.replace(".png", ".npy"))
+            # image_file_name = os.path.basename(fn[0]) + "_30m.png"
+            # _2D_feature_dir = os.path.join(cfg.experiment_dir, "resnet_encodings")
+            # if not os.path.exists(_2D_feature_dir):
+            #     os.makedirs(_2D_feature_dir, exist_ok=True)
+            # _2D_feature_fp = os.path.join(_2D_feature_dir, image_file_name.replace(".png", ".npy"))
             
-            if not os.path.exists(_2D_feature_fp):
-                np.save(_2D_feature_fp, _2D_features.cpu().numpy())
+            # if not os.path.exists(_2D_feature_fp):
+            #     np.save(_2D_feature_fp, _2D_features.cpu().numpy())
             
-            point_cloud_file_name = os.path.basename(fn[0]) + "_30m.npz"
-            _3D_feature_dir = os.path.join(cfg.experiment_dir, "pointvector_encodings")
-            if not os.path.exists(_3D_feature_dir):
-                os.makedirs(_3D_feature_dir, exist_ok=True)
-            _3D_feature_fp = os.path.join(_3D_feature_dir, point_cloud_file_name.replace(".npz", ".npy"))
+            # point_cloud_file_name = os.path.basename(fn[0]) + "_30m.npz"
+            # _3D_feature_dir = os.path.join(cfg.experiment_dir, "pointvector_encodings")
+            # if not os.path.exists(_3D_feature_dir):
+            #     os.makedirs(_3D_feature_dir, exist_ok=True)
+            # _3D_feature_fp = os.path.join(_3D_feature_dir, point_cloud_file_name.replace(".npz", ".npy"))
             
-            if not os.path.exists(_3D_feature_fp):
-                np.save(_3D_feature_fp, _3D_features.cpu().numpy())
+            # if not os.path.exists(_3D_feature_fp):
+            #     np.save(_3D_feature_fp, _3D_features.cpu().numpy())
             
-            outputs = model.forward_MLP_predictions(features_2D_3D)
+            outputs = model(data)
             _, preds = torch.max(outputs, 1)
             # Calculate the confidence scores between 0-100% for the predictions
             confidences = torch.nn.functional.softmax(outputs, dim=1)
