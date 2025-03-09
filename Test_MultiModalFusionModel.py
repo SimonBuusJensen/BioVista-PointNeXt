@@ -81,26 +81,74 @@ class MLPModel(nn.Module):
         self.shortcut_fusion = shortcut_fusion
         self.fusion_type = fusion_type
 
-        hidden_sizes = [1024, 512, 256]
-        self.layers = []
-        in_features = input_size
+        if self.shortcut_fusion and self.fusion_type == "concat":
+            hidden_sizes = [512, 256, 256]
+            self.layer_groups = []
+            
+            in_features = input_size
+            for layer_i, hidden_size in enumerate(hidden_sizes):
+                layers = []
+                layers.append(nn.Linear(in_features, hidden_size))
+                layers.append(nn.ReLU())
+                layers.append(nn.BatchNorm1d(hidden_size))
+                # Normalization for stability
+                if dropout_rate > 0:
+                    layers.append(nn.Dropout(dropout_rate))  # Prevent overfitting
 
-        for hidden_size in hidden_sizes:
-            self.layers.append(nn.Linear(in_features, hidden_size))
-            self.layers.append(nn.ReLU())
-            self.layers.append(nn.BatchNorm1d(hidden_size))
-            # Normalization for stability
-            if dropout_rate > 0:
-                self.layers.append(nn.Dropout(dropout_rate))  # Prevent overfitting
+                self.layer_groups.append(nn.Sequential(*layers))
 
-            in_features = hidden_size  # Set input size for next layer
+                if layer_i == len(hidden_sizes) - 1:
+                    in_features = hidden_size
+                else:
+                    in_features = int(hidden_size * 2)  # Set input size for next layer *2 because of the shortcut connection
 
-        # Final output layer
-        self.layers.append(nn.Linear(in_features, output_size))
-        self.model = nn.Sequential(*self.layers)
+            # Final output layer
+            self.layer_groups.append(nn.Linear(in_features, output_size))
+            self.model = nn.Sequential(*self.layer_groups)
+
+        else:
+            hidden_sizes = [1024, 512, 256]
+            in_features = input_size
+            layers = []
+
+            for hidden_size in hidden_sizes:
+                
+                layers.append(nn.Linear(in_features, hidden_size))
+                layers.append(nn.ReLU())
+                layers.append(nn.BatchNorm1d(hidden_size))
+                # Normalization for stability
+                if dropout_rate > 0:
+                    layers.append(nn.Dropout(dropout_rate))  # Prevent overfitting
+
+                in_features = hidden_size  # Set input size for next layer
+
+            # Final output layer
+            layers.append(nn.Linear(in_features, output_size))
+            self.model = nn.Sequential(*self.layers)
 
     def forward(self, x):
         return self.model(x)
+    
+    def forward_shortcut_fusion(self, x):
+        """
+        x: list of features from different scales [1024, 512 and 256]
+        if self.fusion_type is concat, we concatenate the features
+        """
+        feat_1024 = x[0]
+        feat_512 = x[1]
+        feat_256 = x[2]
+
+        if self.fusion_type == "concat":
+            x = self.layer_groups[0](feat_1024)
+            x = torch.concat([x, feat_512], dim=1)
+            x = self.layer_groups[1](x)
+            x = torch.concat([x, feat_256], dim=1)
+            x = self.layer_groups[2](x)
+            x = self.layer_groups[3](x)
+        else:
+            raise NotImplementedError("Only concat fusion is supported.")
+        return x 
+
 
 
 class MultiModalFusionModel(nn.Module):
@@ -168,8 +216,9 @@ class MultiModalFusionModel(nn.Module):
             fused_256 = torch.cat([img_features_list[0], pc_features_list[0]], dim=1)
             fused_512 = torch.cat([img_features_list[1], pc_features_list[1]], dim=1)
             fused_1024 = torch.cat([img_features_list[2], pc_features_list[2]], dim=1)
-            out = self.fusion_head([fused_1024, fused_512, fused_256])
-
+            
+            # Now, we want to forward the fused features through the MLP model
+            out = self.fusion_head.forward_shortcut_fusion([fused_1024, fused_512, fused_256])
         else:
             # Extract image features. (Assume image is (B, C, H, W))
             image_features = self.forward_2D_feature_encodings(data['img'])
@@ -183,7 +232,8 @@ class MultiModalFusionModel(nn.Module):
 
             # Pass the fused vector through the MLP fusion head.
             out = self.fusion_head(fused_features)
-            return out
+        
+        return out
     
     def forward_MLP_predictions(self, features_2D_3D):
         # Forward pass through the MLP model

@@ -28,7 +28,7 @@ import os
 
 
 # csv_file = "/home/simon/Downloads/all-pointvector-als-experiments.csv"
-csv_file = "/home/simon/Downloads/BioVista-Multimodal-MLP-Fusion-Hyperparameter-Search_v2.csv"
+csv_file = "/home/simon/Downloads/all-active-mlp-fusion-experiments.csv"
 
 df = pd.read_csv(csv_file)
 
@@ -40,7 +40,7 @@ filtered_df = df[
     # (df['num_points'] == 24576) &
     # (df['qb_radius'] == 0.65) &
     # (df['qb_radius_scaling'] == 1.5) &
-    # (df['with_class_weights'] == False) &
+    (df['with_class_weights'] == True) &
     # (df['with_point_cloud_jitter'] == False) &
     # (df['with_point_cloud_rotations'] == False) &
     # (df['with_point_cloud_scaling'] == False) &
@@ -48,9 +48,9 @@ filtered_df = df[
     # (df['with_normalize_intensity'] == True) &
     # (df['normalize_intensity_scale'] == 1) &
     (df['fusion_lr'] == 0.0001)  &
-    (df['backbone_lr'] == 0)  
+    (df['backbone_lr'] == 0.000001) &  
     # (df['lr'] == 0.0001)  &
-    # (df['batch_size'] == 12)
+    (df['batch_size'] == 64)
 ]
 
 # Sort by test_oa
