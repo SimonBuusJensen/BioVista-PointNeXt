@@ -58,10 +58,10 @@ if __name__ == "__main__":
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
                         # default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
-                        default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion-Active-and-Frozen-Backbones/resnet_3_and_pointvector_3/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
-                        default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
+                        default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion-Active-and-Frozen-Backbones/resnet_3_and_pointvector_3/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-03-15-27-21_BioVista-Query-Ball-Radius-and-Scaling-v1_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
     # parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion/Baseline-Frozen/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0.000001)
-    parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=True)
+    parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=False)
     parser.add_argument("--with_class_weights", type=str2bool, help="Whether to use class weighted loss", default=True)
     
     # General arguments
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     experiment_name = f"{date_now_str}-{experiment_id}-{cfg.project_name}"
     
     # Setup output dir for the experiment to save log, models, test results, etc.
-    cfg.experiment_dir = os.path.join(os.path.dirname(args.source), "experiments", "2D-3D-Fusion", "MLP-Fusion-Active", cfg.project_name, experiment_name)
+    cfg.experiment_dir = os.path.join(os.path.dirname(args.source), "experiments", "2D-3D-Fusion", "MLP-Fusion-Active-and-Frozen-Backbones", cfg.project_name, experiment_name)
     os.makedirs(cfg.experiment_dir, exist_ok=True)
     
     # Init logger

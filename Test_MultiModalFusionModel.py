@@ -126,7 +126,7 @@ class MLPModel(nn.Module):
 
             # Final output layer
             layers.append(nn.Linear(in_features, output_size))
-            self.model = nn.Sequential(*self.layers)
+            self.model = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.model(x)
@@ -205,7 +205,7 @@ class MultiModalFusionModel(nn.Module):
         self.fusion_head = MLPModel(input_size=fusion_input_size,
                                     output_size=num_classes,
                                     dropout_rate=0.0,
-                                    shortcut_fusion=with_shortcut_fusion,
+                                    shortcut_fusion=self.with_shortcut_fusion,
                                     fusion_type=self.fusion_type)
 
     def forward(self, data):
