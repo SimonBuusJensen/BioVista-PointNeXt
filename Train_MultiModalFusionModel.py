@@ -161,14 +161,14 @@ if __name__ == "__main__":
                               shuffle=True, 
                               num_workers=args.num_workers, 
                               drop_last=True)
-    train_loader.dataset.df = train_loader.dataset.df.sample(100, random_state=cfg.seed)
+    train_loader.dataset.df = train_loader.dataset.df.sample(200, random_state=cfg.seed)
     
     val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform)
     val_loader = DataLoader(val_dataset, 
                             batch_size=cfg.batch_size, 
                             shuffle=False, 
                             num_workers=args.num_workers)
-    val_loader.dataset.df = val_loader.dataset.df.sample(100, random_state=cfg.seed)
+    val_loader.dataset.df = val_loader.dataset.df.sample(200, random_state=cfg.seed)
     
     # Setup wandb
     assert isinstance(args.use_wandb, bool), "The use_wandb must be a boolean."
@@ -393,7 +393,7 @@ if __name__ == "__main__":
 
     test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
-    test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
+    test_loader.dataset.df = test_loader.dataset.df.sample(200, random_state=cfg.seed)
     logging.info("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
     overall_test_acc = 0.0
