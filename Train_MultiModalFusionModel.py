@@ -220,7 +220,7 @@ if __name__ == "__main__":
         criterion = torch.nn.CrossEntropyLoss().to(device)
 
     best_val_overall_acc = 0.0
-    patience = 8 # Early stopping patience (will stop training if the validation accuracy does not improve after this number of epochs)
+    patience = args.epochs # Early stopping patience (will stop training if the validation accuracy does not improve after this number of epochs)
     epochs_without_improvement = 0
     model.train()  # set model to training mode
     
