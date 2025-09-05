@@ -59,7 +59,7 @@ if __name__ == "__main__":
     # Training arguments
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=5)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
-    parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=0)
+    parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=2)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0.000001)
     parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=False)
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     logging.info(f"Loaded the best model from epoch {best_epoch} found during validation.")
 
     model.eval()
-    with torch.set_grad_enabled(False):
+    with torch.no_grad():
         for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__(), desc=f"Testing:"):
 
             for key in data.keys():
