@@ -13,6 +13,7 @@ from openpoints.models.backbone.pointvector import PointVectorEncoder
 from openpoints.models.classification.cls_base import ClsHead
 from openpoints.dataset import BioVista2D3D
 from fusion_classifier.FeatureDataset import FeatureDataset
+from test_classifier import str2bool
 
 
 class ResNetClassifier(nn.Module):
@@ -155,9 +156,11 @@ class MLPModel(nn.Module):
 
 class MultiModalFusionModel(nn.Module):
     def __init__(self,
-                 num_classes=2,
-                 fusion_input_size=1024,
-                 with_shortcut_fusion=False,
+                 img_channel:int,
+                 pts_channel:int,
+                 num_classes:int=2,
+                 fusion_input_size:int=1024,
+                 with_shortcut_fusion:bool=False,
                  fusion_type="concat"
                  ):
         super(MultiModalFusionModel, self).__init__()
@@ -170,13 +173,13 @@ class MultiModalFusionModel(nn.Module):
         # Note: Here we use get_feature_encodings to get a feature vector.
         # You might need to adjust the final feature dimension.
         self.image_backbone = ResNetClassifier(num_classes=2,
-                                               in_channels=3)
+                                               in_channels=img_channel)
 
         # Instantiate point cloud backbone.
         # Use the same configuration you use for PointVector-S. Adjust parameters as needed.
         self.point_backbone = nn.Module()
         self.point_backbone.encoder = PointVectorEncoder(
-            in_channels=4,
+            in_channels=pts_channel,
             width=32,
             blocks=[1, 1, 1, 1, 1, 1],
             strides=[1, 2, 2, 2, 2, 1],
@@ -348,6 +351,8 @@ if __name__ == "__main__":
     parser.add_argument('--cfg', type=str, help='config file',
                         # default="/workspace/src/cfgs/biovista_2D_3D/pointvector-s.yaml")
                         default="cfgs/biovista/pointvector-s.yaml")
+    parser.add_argument('--orthophoto_channels', type=str, help='RGB, NGB, RGBN', default="NRG")
+    parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=False)
     parser.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
                         default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
                         # default="/workspace/datasets/samples.csv")
@@ -401,8 +406,14 @@ if __name__ == "__main__":
 
     # Check if cuda is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    with_shortcut_fusion = args.with_shortcut_fusion  # should come from loaded cfg
+    pts_channel = 4
+    img_channel =len(args.orthophoto_channels)
+
     # model = build_model_from_cfg(cfg.model).to(device)
-    model = MultiModalFusionModel()
+    model = MultiModalFusionModel(
+        img_channel=img_channel, pts_channel=pts_channel, with_shortcut_fusion=with_shortcut_fusion
+    )
     model_size = cal_model_parm_nums(model)
     # print(model)
     print('Number of params: %.4f M' % (model_size / 1e6))
@@ -444,7 +455,9 @@ if __name__ == "__main__":
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
-    # test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
+    # test_dataset = BioVista2D3D(
+    #   data_root=args.source, split='test', transform=transform, orthophoto_channels=args.orthophoto_channels, seed=cfg.seed
+    # )
     # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
     # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
     

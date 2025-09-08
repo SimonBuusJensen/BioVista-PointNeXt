@@ -54,6 +54,7 @@ if __name__ == "__main__":
                         help="Path to an image, a directory of images or a csv file with image paths.")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file', default=None)
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file', default=None)
+    parser.add_argument('--orthophoto_channels', type=str, help='RGB, NGB, RGBN', default="NRG")
     parser.add_argument('--seed', type=int, help='Random seed', default=None)
 
     # Training arguments
@@ -105,14 +106,18 @@ if __name__ == "__main__":
     # Model arguments
     with_shortcut_fusion = args.with_shortcut_fusion
     assert isinstance(with_shortcut_fusion, bool), "The with_shortcut_fusion must be a boolean."
-    cfg.model.encoder_args.in_channels = 4  # xyzh
+    pts_channel = 4
+    img_channel = len(args.orthophoto_channels)
+    cfg.model.encoder_args.in_channels = pts_channel  # xyzh
     cfg.model.encoder_args.radius = 0.65
     cfg.model.encoder_args.radius_scaling = 1.5
 
     # Check if cuda is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model = build_model_from_cfg(cfg.model).to(device)
-    model = MultiModalFusionModel(with_shortcut_fusion=with_shortcut_fusion)
+    model = MultiModalFusionModel(
+        img_channel=img_channel, pts_channel=pts_channel, with_shortcut_fusion=with_shortcut_fusion
+    )
     model_size = cal_model_parm_nums(model)
     logging.info(f'Number of params: {(model_size / 1e6)} M')
 
@@ -153,7 +158,9 @@ if __name__ == "__main__":
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
 
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
-    train_dataset = BioVista2D3D(data_root=args.source, split='train', transform=transform)
+    train_dataset = BioVista2D3D(
+        data_root=args.source, split='train', transform=transform, orthophoto_channels=args.orthophoto_channels
+    )
     train_loader = DataLoader(train_dataset,
                               batch_size=cfg.batch_size,
                               shuffle=True,
@@ -161,7 +168,9 @@ if __name__ == "__main__":
                               drop_last=True)
     # train_loader.dataset.df = train_loader.dataset.df.sample(200, random_state=cfg.seed)
 
-    val_dataset = BioVista2D3D(data_root=args.source, split='val', transform=transform)
+    val_dataset = BioVista2D3D(
+        data_root=args.source, split='val', transform=transform, orthophoto_channels=args.orthophoto_channels
+    )
     val_loader = DataLoader(val_dataset,
                             batch_size=cfg.batch_size,
                             shuffle=False,
@@ -336,7 +345,9 @@ if __name__ == "__main__":
                 class_correct_val = val_cm.tp[class_idx].item()
                 class_acc_val = (class_correct_val / class_total_val) * 100 if class_total_val > 0 else 0
                 logging.info(
-                    f"Val: class {val_dataset.classes[class_idx]} (id: {class_idx}) correct: {class_correct_val}/{class_total_val} ({class_acc_val:.1f}%)")
+                    f"Val: class {val_dataset.classes[class_idx]} "
+                    f"(id: {class_idx}) correct: {class_correct_val}/{class_total_val} ({class_acc_val:.1f}%)"
+                )
 
             # check if the current model is the best model
             is_best = val_overall_acc > best_val_overall_acc
@@ -354,19 +365,24 @@ if __name__ == "__main__":
                     os.remove(os.path.join(cfg.experiment_dir, prev_best_model[0]))
 
                 logging.info(f"Saving the best model with overall accuracy: {best_val_overall_acc:.2f}%")
-                cur_best_model_fp = os.path.join(cfg.experiment_dir,
-                                                 f"multi_modal_fusion_model_{best_val_overall_acc:.2f}_epoch_{epoch}.pth")
+                cur_best_model_fp = os.path.join(
+                    cfg.experiment_dir, f"multi_modal_fusion_model_{best_val_overall_acc:.2f}_epoch_{epoch}.pth"
+                )
                 torch.save(model.state_dict(), cur_best_model_fp)
 
                 # Write the results to a csv file
-                pred_label_fp = os.path.join(cfg.experiment_dir,
-                                             f"val_prediction_labels_epoch_{epoch}_oa_{round(best_val_overall_acc, 1)}.csv")
+                pred_label_fp = os.path.join(
+                    cfg.experiment_dir, f"val_prediction_labels_epoch_{epoch}_oa_{round(best_val_overall_acc, 1)}.csv"
+                )
                 with open(pred_label_fp, "w") as f:
                     f.write("image_path,prediction,label,correct,confidence\n")
-                    for img_path, pred, label, conf in zip(val_file_path_list, val_pred_list, val_label_list,
-                                                           val_conf_list):
+                    for img_path, pred, label, conf in zip(
+                            val_file_path_list, val_pred_list, val_label_list, val_conf_list
+                    ):
                         f.write(
-                            f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf * 100, 0)}\n")
+                            f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},"
+                            f"{round(conf * 100, 0)}\n"
+                        )
                     # Write overall high, low and total accuracy
                     low_total = val_cm.actual[0].item()
                     low_correct = val_cm.tp[0].item()
@@ -377,7 +393,9 @@ if __name__ == "__main__":
                     high_acc = (high_correct / high_total) * 100 if high_total > 0 else 0
                     f.write(f"High bio correct,{high_correct},{high_total},{high_acc}\n")
                     f.write(
-                        f"Overall validation accuracy,{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{best_val_overall_acc}\n")
+                        f"Overall validation accuracy,"
+                        f"{val_cm.tp.sum().item()},{val_cm.actual.sum().item()},{best_val_overall_acc}\n"
+                    )
                     f.write(f"Mean validation accuracy,,,{val_macc}\n")
                 f.close()
             else:
@@ -495,9 +513,12 @@ if __name__ == "__main__":
         # Write overall high, low and total accuracy
         f.write(f"Low bio correct,{low_correct_test.item()},{n_low_bio_samples_test.item()},{overall_val_acc_low}\n")
         f.write(
-            f"High bio correct,{high_correct_test.item()},{n_high_bio_samples_test.item()},{overall_val_acc_high}\n")
+            f"High bio correct,{high_correct_test.item()},{n_high_bio_samples_test.item()},{overall_val_acc_high}\n"
+        )
         f.write(
-            f"Overall test accuracy,{low_correct_test.item() + high_correct_test.item()},{len(test_dataset)},{round(overall_test_acc, 2)}\n")
+            f"Overall test accuracy,"
+            f"{low_correct_test.item() + high_correct_test.item()},{len(test_dataset)},{round(overall_test_acc, 2)}\n"
+        )
         f.write(f"Mean test accuracy,,,{round((overall_val_acc_low + overall_val_acc_high) / 2, 2)}\n")
     f.close()
 
