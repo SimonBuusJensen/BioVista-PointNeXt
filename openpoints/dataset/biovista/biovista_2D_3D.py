@@ -22,6 +22,7 @@ class BioVista2D3D(Dataset):
                  num_points=16384,
                  transform=None,
                  format='npz',
+                 orthophoto_channels="NGB",
                  in_memory=True,
                  seed=None,
                  ):
@@ -73,7 +74,7 @@ class BioVista2D3D(Dataset):
         """
         self.rgb_image_root = os.path.join(self.data_root, "RGB_orthophotos")
         self.nir_image_root = os.path.join(self.data_root, "NIR-RG_orthophotos")
-        self.orthophoto_channels = "NGB"
+        self.orthophoto_channels = orthophoto_channels
         self.test_plot_diameter_meters = self.test_plot_radius_meters * 2
         self.test_plot_diameter_pxs = int(self.test_plot_diameter_meters * 100 / self.CM_PER_PX)
         if self.split == "val" or self.split == "test":
@@ -256,10 +257,17 @@ class BioVista2D3D(Dataset):
             image_array = np.zeros(
                 (self.test_plot_diameter_pxs, self.test_plot_diameter_pxs, len(self.orthophoto_channels)),
                 dtype=np.float32)
-            if self.orthophoto_channels == "NGB":
+            if self.orthophoto_channels == "RGB":
+                image_array[:, :, 0] = rgb_array[:, :, 0]
+                image_array[:, :, 1] = rgb_array[:, :, 1]
+                image_array[:, :, 2] = rgb_array[:, :, 2]
+            elif self.orthophoto_channels == "NGB":
                 image_array[:, :, 0] = nir_array[:, :, 0]
                 image_array[:, :, 1] = rgb_array[:, :, 1]
                 image_array[:, :, 2] = rgb_array[:, :, 2]
+            elif self.orthophoto_channels == "RGBN":
+                image_array[..., :3] = rgb_array[..., :3]
+                image_array[..., 3] = nir_img[..., 0]
 
             # Convert to uint8
             image_array = image_array.astype(np.uint8)
