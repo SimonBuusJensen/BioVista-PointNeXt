@@ -267,7 +267,7 @@ class BioVista2D3D(Dataset):
                 image_array[:, :, 2] = rgb_array[:, :, 2]
             elif self.orthophoto_channels == "RGBN":
                 image_array[..., :3] = rgb_array[..., :3]
-                image_array[..., 3] = nir_img[..., 0]
+                image_array[..., 3] = nir_array[..., 0]
 
             # Convert to uint8
             image_array = image_array.astype(np.uint8)
