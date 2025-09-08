@@ -60,6 +60,7 @@ if __name__ == "__main__":
     # Training arguments
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=5)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--in_memory", help="Cache whole dataset", type=str2bool, default=False)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=2)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
     parser.add_argument("--backbone_lr", type=float, help="Learning rate factor for the backbone", default=0.000001)
@@ -159,7 +160,8 @@ if __name__ == "__main__":
 
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     train_dataset = BioVista2D3D(
-        data_root=args.source, split='train', transform=transform, orthophoto_channels=args.orthophoto_channels
+        data_root=args.source, split='train', transform=transform, orthophoto_channels=args.orthophoto_channels,
+        in_memory=args.in_memory
     )
     train_loader = DataLoader(train_dataset,
                               batch_size=cfg.batch_size,
@@ -169,7 +171,8 @@ if __name__ == "__main__":
     # train_loader.dataset.df = train_loader.dataset.df.sample(200, random_state=cfg.seed)
 
     val_dataset = BioVista2D3D(
-        data_root=args.source, split='val', transform=transform, orthophoto_channels=args.orthophoto_channels
+        data_root=args.source, split='val', transform=transform, orthophoto_channels=args.orthophoto_channels,
+        in_memory=args.in_memory
     )
     val_loader = DataLoader(val_dataset,
                             batch_size=cfg.batch_size,

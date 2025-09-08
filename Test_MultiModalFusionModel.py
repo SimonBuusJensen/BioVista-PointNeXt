@@ -1,18 +1,18 @@
 import argparse
-import torch
+import logging
 import os
-import logging 
+
 import numpy as np
+import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision.models import resnet18
 from tqdm import tqdm
 
-from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed
+from fusion_classifier.FeatureDataset import FeatureDataset
 from openpoints.models.backbone.pointvector import PointVectorEncoder
 from openpoints.models.classification.cls_base import ClsHead
-from openpoints.dataset import BioVista2D3D
-from fusion_classifier.FeatureDataset import FeatureDataset
+from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed
 from test_classifier import str2bool
 
 
@@ -51,9 +51,8 @@ class ResNetClassifier(nn.Module):
             x = self.resnet.avgpool(x)
             features = torch.flatten(x, 1)
             return features
-        
-    def get_all_feature_encodings(self, x):
 
+    def get_all_feature_encodings(self, x):
         x = self.resnet.conv1(x)
         x = self.resnet.bn1(x)
         x = self.resnet.relu(x)
@@ -73,8 +72,6 @@ class ResNetClassifier(nn.Module):
         features_512 = torch.flatten(features_512, 1)
         return [features_128, features_256, features_512]
 
-        
-
 
 class MLPModel(nn.Module):
     def __init__(self, input_size=1024, output_size=2, dropout_rate=0.0, shortcut_fusion=False, fusion_type="concat"):
@@ -87,7 +84,7 @@ class MLPModel(nn.Module):
             logging.info("Shortcut fusion with concat")
             hidden_sizes = [512, 256, 256]
             self.layer_groups = []
-            
+
             in_features = input_size
             for layer_i, hidden_size in enumerate(hidden_sizes):
                 layers = []
@@ -103,7 +100,8 @@ class MLPModel(nn.Module):
                 if layer_i == len(hidden_sizes) - 1:
                     in_features = hidden_size
                 else:
-                    in_features = int(hidden_size * 2)  # Set input size for next layer *2 because of the shortcut connection
+                    in_features = int(
+                        hidden_size * 2)  # Set input size for next layer *2 because of the shortcut connection
 
             # Final output layer
             self.layer_groups.append(nn.Linear(in_features, output_size))
@@ -115,7 +113,7 @@ class MLPModel(nn.Module):
             layers = []
 
             for hidden_size in hidden_sizes:
-                
+
                 layers.append(nn.Linear(in_features, hidden_size))
                 layers.append(nn.ReLU())
                 layers.append(nn.BatchNorm1d(hidden_size))
@@ -131,7 +129,7 @@ class MLPModel(nn.Module):
 
     def forward(self, x):
         return self.model(x)
-    
+
     def forward_shortcut_fusion(self, x):
         """
         x: list of features from different scales [1024, 512 and 256]
@@ -150,17 +148,16 @@ class MLPModel(nn.Module):
             x = self.layer_groups[3](x)
         else:
             raise NotImplementedError("Only concat fusion is supported.")
-        return x 
-
+        return x
 
 
 class MultiModalFusionModel(nn.Module):
     def __init__(self,
-                 img_channel:int,
-                 pts_channel:int,
-                 num_classes:int=2,
-                 fusion_input_size:int=1024,
-                 with_shortcut_fusion:bool=False,
+                 img_channel: int,
+                 pts_channel: int,
+                 num_classes: int = 2,
+                 fusion_input_size: int = 1024,
+                 with_shortcut_fusion: bool = False,
                  fusion_type="concat"
                  ):
         super(MultiModalFusionModel, self).__init__()
@@ -198,11 +195,11 @@ class MultiModalFusionModel(nn.Module):
         )
 
         self.point_backbone.prediction = ClsHead(num_classes=num_classes,
-                                               in_channels=512,
-                                               mlps=[512, 256],
-                                               norm_args={'norm': 'bn1d'},
-                                               )
-        
+                                                 in_channels=512,
+                                                 mlps=[512, 256],
+                                                 norm_args={'norm': 'bn1d'},
+                                                 )
+
         # Fusion head: expects concatenated features.
         # For example, if both backbones output 512-d features, then 512 + 512 = 1024.
         self.fusion_head = MLPModel(input_size=fusion_input_size,
@@ -217,12 +214,12 @@ class MultiModalFusionModel(nn.Module):
             # Multi-scale feature extraction and fusion
             img_features_list = self.image_backbone.get_all_feature_encodings(data['img'])
             pc_features_list = self.point_backbone.encoder.forward_all_cls_feat(data)
-            
+
             # Fuse features at each scale
             fused_256 = torch.cat([img_features_list[0], pc_features_list[0]], dim=1)
             fused_512 = torch.cat([img_features_list[1], pc_features_list[1]], dim=1)
             fused_1024 = torch.cat([img_features_list[2], pc_features_list[2]], dim=1)
-            
+
             # Now, we want to forward the fused features through the MLP model
             out = self.fusion_head.forward_shortcut_fusion([fused_1024, fused_512, fused_256])
         else:
@@ -238,9 +235,9 @@ class MultiModalFusionModel(nn.Module):
 
             # Pass the fused vector through the MLP fusion head.
             out = self.fusion_head(fused_features)
-        
+
         return out
-    
+
     def forward_MLP_predictions(self, features_2D_3D):
         # Forward pass through the MLP model
         outputs = self.fusion_head(features_2D_3D)
@@ -250,7 +247,7 @@ class MultiModalFusionModel(nn.Module):
         # Extract Features from the input image using the ResNet-18 backbone.
         image_features = self.image_backbone.get_feature_encodings(image)
         return image_features
-    
+
     def forward_all_2D_feature_encodings(self, image):
         # Extract Features from the input image using the ResNet-18 backbone.
         image_features = self.image_backbone.get_all_feature_encodings(image)
@@ -260,7 +257,7 @@ class MultiModalFusionModel(nn.Module):
         # Extract Features from the 3D point cloud using the PointVector-S backbone.
         point_features = self.point_backbone.encoder.forward_cls_feat(point_cloud)
         return point_features
-    
+
     def forward_all_3D_feature_encodings(self, point_cloud):
         # Extract Features from the 3D point cloud using the PointVector-S backbone.
         point_features = self.point_backbone.encoder.forward_all_cls_feat(point_cloud)
@@ -307,7 +304,7 @@ class MultiModalFusionModel(nn.Module):
             # Directly load the weights into the ResNet model of the image backbone.
             self.image_backbone.load_state_dict(state_dict)
             print("Loaded ResNet weights.")
-        
+
         if pointvector_weights_path:
             if not os.path.exists(pointvector_weights_path):
                 raise NotImplementedError('no checkpoint file from path %s...' % pointvector_weights_path)
@@ -317,7 +314,7 @@ class MultiModalFusionModel(nn.Module):
             # parameter resume of base model
             ckpt_state_dict = state_dict['model']
             base_ckpt = {k.replace("module.", ""): v for k, v in ckpt_state_dict.items()}
-        
+
             self.point_backbone.load_state_dict(base_ckpt)
             # epoch = state_dict.get('epoch', -1)
             print("Loaded PointVector-S weights.")
@@ -328,7 +325,6 @@ class MultiModalFusionModel(nn.Module):
             # Directly load the weights into the MLP model of the fusion head.
             self.fusion_head.load_state_dict(state_dict)
             print("Loaded MLP weights.")
-        
 
 
 def load_checkpoint(model, pretrained_path):
@@ -340,11 +336,12 @@ def load_checkpoint(model, pretrained_path):
     # parameter resume of base model
     ckpt_state_dict = state_dict['model']
     base_ckpt = {k.replace("module.", ""): v for k, v in ckpt_state_dict.items()}
-  
+
     model.load_state_dict(base_ckpt)
     epoch = state_dict.get('epoch', -1)
-    
+
     return epoch
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
@@ -353,52 +350,54 @@ if __name__ == "__main__":
                         default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument('--orthophoto_channels', type=str, help='RGB, NGB, RGBN', default="NRG")
     parser.add_argument("--with_shortcut_fusion", type=str2bool, help="Whether to use shortcut fusion", default=False)
-    parser.add_argument("--source", type=str, help="Path to an image, a directory of images or a csv file with image paths.",
+    parser.add_argument("--source", type=str,
+                        help="Path to an image, a directory of images or a csv file with image paths.",
                         default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/samples.csv")
-                        # default="/workspace/datasets/samples.csv")
+    # default="/workspace/datasets/samples.csv")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file',
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/2025-01-22-21-35-49_resnet18_epoch_15_acc_78.67.pth")
                         default=None)
-    parser.add_argument("--features_dir_2d", type=str, help="Path to a directory containing the 2D features of the images.",
+    parser.add_argument("--features_dir_2d", type=str,
+                        help="Path to a directory containing the 2D features of the images.",
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-22-21-35-49_BioVista-ResNet-18-vs-34-vs-50_v1_resnet18_channels_NGB/resnet_encodings/")
                         default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/BioVista-Multimodal-Fusion-Active-Weights-Test/2025-03-04-14-50-13-BioVista-Multimodal-Fusion-Active-Weights-Test/resnet_encodings")
-                        # default=None)
+    # default=None)
 
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file',
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/checkpoint/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5_ckpt_best.pth")
                         default=None)
-    parser.add_argument("--features_dir_3d", type=str, help="Path to a directory containing the 3D features of the point clouds.",
+    parser.add_argument("--features_dir_3d", type=str,
+                        help="Path to a directory containing the 3D features of the point clouds.",
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/3D-ALS-point-cloud-PointVector/2025-02-05-21-52-36_BioVista-Data-Augmentation_v2_pointvector-s_channels_xyzh_npts_16384_qb_r_0.65_qb_s_1.5/pointvector_encodings/")
                         default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/BioVista-Multimodal-Fusion-Active-Weights-Test/2025-03-04-14-50-13-BioVista-Multimodal-Fusion-Active-Weights-Test/pointvector_encodings")
-                        # default=None)
+    # default=None)
 
-    parser.add_argument('--mlp_weights', type=str, help='MLP weights file', 
+    parser.add_argument('--mlp_weights', type=str, help='MLP weights file',
                         # default="/workspace/datasets/experiments/2D-3D-Fusion/MLP-Fusion/Baseline-Frozen/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
                         # default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/2025-02-20-17-32-55_365_MLP-2D-3D-Fusion_BioVista-MLP-Fusion-Same-Features-v2/mlp_model_81.56_epoch_11.pth")
                         default=None)
-    
-    parser.add_argument('--multi_modal_weights', type=str, help='MultiModalFusionModel weights file', 
+
+    parser.add_argument('--multi_modal_weights', type=str, help='MultiModalFusionModel weights file',
                         default="/home/simon/data/BioVista/datasets/Forest-Biodiversity-Potential/experiments/2D-3D-Fusion/MLP-Fusion/BioVista-Multimodal-Fusion-Active-Weights-Test/2025-03-04-14-50-13-BioVista-Multimodal-Fusion-Active-Weights-Test/multi_modal_fusion_model_69.00_epoch_2.pth")
-    
-    
+
     parser.add_argument('--seed', type=int, help='Random seed', default=42)
-    
+
     args, opts = parser.parse_known_args()
     cfg = EasyConfig()
     cfg.load(args.cfg, recursive=True)
     cfg.update(opts)
-    
+
     # Set the seed
     if args.seed is not None:
         cfg.seed = args.seed
     else:
         cfg.seed = np.random.randint(1, 10000)
-        
+
     set_random_seed(cfg.seed, deterministic=cfg.deterministic)
-    torch.backends.cudnn.enabled = True    
-    
+    torch.backends.cudnn.enabled = True
+
     # Model arguments
     cfg.model.encoder_args.in_channels = 4  # xyzh
     cfg.model.encoder_args.radius = 0.65
@@ -408,7 +407,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     with_shortcut_fusion = args.with_shortcut_fusion  # should come from loaded cfg
     pts_channel = 4
-    img_channel =len(args.orthophoto_channels)
+    img_channel = len(args.orthophoto_channels)
 
     # model = build_model_from_cfg(cfg.model).to(device)
     model = MultiModalFusionModel(
@@ -425,13 +424,13 @@ if __name__ == "__main__":
     multi_modal_weights = args.multi_modal_weights
     features_dir_2d = args.features_dir_2d
     features_dir_3d = args.features_dir_3d
-    
+
     if resnet_model_weights is not None:
         assert os.path.exists(resnet_model_weights), "ResNet model weights not found."
     if pointvector_weights is not None:
         assert os.path.exists(pointvector_weights), "PointVector-S model weights not found."
     if mlp_weights is not None:
-        assert os.path.exists(mlp_weights), "MLP model weights not found."  
+        assert os.path.exists(mlp_weights), "MLP model weights not found."
     if multi_modal_weights is not None:
         assert os.path.exists(multi_modal_weights), "MultiModalFusionModel weights not found."
 
@@ -441,29 +440,31 @@ if __name__ == "__main__":
     if features_dir_3d is not None:
         assert os.path.exists(features_dir_3d), f"3D features directory not found: {features_dir_3d}"
 
-
     # Test if we can load ResNet model weights
     # resnet_model_weights = "/workspace/datasets/experiments/2D-3D-Fusion/2D-Orthophotos-ResNet/2025-01-21-15-02-20_BioVista-ResNet-18-RGBNIR-Channels_v1_resnet18_channels_NGB/2025-01-21-15-02-20_resnet18_epoch_9_acc_79.25.pth"
     output_dir = os.path.dirname(multi_modal_weights)
-    model.load_weights(resnet_weights_path=resnet_model_weights, 
-                       pointvector_weights_path=pointvector_weights, 
-                       mlp_weights_path=mlp_weights, 
+    model.load_weights(resnet_weights_path=resnet_model_weights,
+                       pointvector_weights_path=pointvector_weights,
+                       mlp_weights_path=mlp_weights,
                        multimodal_weights_path=multi_modal_weights,
                        map_location=device)
     model.to(device)
 
     from torchvision.transforms import Compose
     from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
+
     transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
     # test_dataset = BioVista2D3D(
-    #   data_root=args.source, split='test', transform=transform, orthophoto_channels=args.orthophoto_channels, seed=cfg.seed
+    #   data_root=args.source, split='test', transform=transform, orthophoto_channels=args.orthophoto_channels, seed=cfg.seed,
+    #   in_memory=False
     # )
     # test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
     # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed)
-    
-    test_dataset = FeatureDataset(csv_file=args.source, feature_dir_2d=features_dir_2d, feature_dir_3d=features_dir_3d, data_split="test")
+
+    test_dataset = FeatureDataset(csv_file=args.source, feature_dir_2d=features_dir_2d, feature_dir_3d=features_dir_3d,
+                                  data_split="test")
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
-    
+
     print("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))
 
     test_acc = 0.0
@@ -478,8 +479,8 @@ if __name__ == "__main__":
 
     model.eval()
     with torch.set_grad_enabled(False):
-        for fn, X_test_batch, y_test_batch in tqdm(test_loader, desc="Evaluating on test set", total=test_loader.__len__()):
-            
+        for fn, X_test_batch, y_test_batch in tqdm(test_loader, desc="Evaluating on test set",
+                                                   total=test_loader.__len__()):
             # Move tensors to the same device
             X_test_batch = X_test_batch.to(device)
             y_test_batch = y_test_batch.to(device)
@@ -505,14 +506,13 @@ if __name__ == "__main__":
             file_path_list.extend(fn)
             conf_list.extend(confidences.cpu().detach().numpy())
 
-
         # for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__()):
 
         #     for key in data.keys():
         #         data[key] = data[key].cuda(non_blocking=True)
 
         #     labels = data['y'].to(device)
-            
+
         #     data['pos'] = data['x'][:, :, :3].contiguous()
         #     data['x'] = data['x'][:, :, :4].transpose(1, 2).contiguous()
 
@@ -520,26 +520,26 @@ if __name__ == "__main__":
         #     _2D_features = model.forward_2D_feature_encodings(data['img'])
         #     _3D_features = model.forward_3D_feature_encodings(data)
         #     features_2D_3D = torch.cat([_2D_features, _3D_features], dim=1)
-            
+
         #     # Save the 2D and 3D encodings
         #     image_file_name = os.path.basename(fn[0]) + "_30m.png"
         #     _2D_feature_dir = os.path.join(os.path.dirname(resnet_model_weights), "resnet_encodings")
         #     if not os.path.exists(_2D_feature_dir):
         #         os.makedirs(_2D_feature_dir, exist_ok=True)
         #     _2D_feature_fp = os.path.join(_2D_feature_dir, image_file_name.replace(".png", ".npy"))
-            
+
         #     if not os.path.exists(_2D_feature_fp):
         #         np.save(_2D_feature_fp, _2D_features.cpu().numpy())
-            
+
         #     point_cloud_file_name = os.path.basename(fn[0]) + "_30m.npz"
         #     _3D_feature_dir = os.path.join(os.path.dirname(os.path.dirname(pointvector_weights)), "pointvector_encodings")
         #     if not os.path.exists(_3D_feature_dir):
         #         os.makedirs(_3D_feature_dir, exist_ok=True)
         #     _3D_feature_fp = os.path.join(_3D_feature_dir, point_cloud_file_name.replace(".npz", ".npy"))
-            
+
         #     if not os.path.exists(_3D_feature_fp):
         #         np.save(_3D_feature_fp, _3D_features.cpu().numpy())
-            
+
         #     outputs = model.forward_MLP_predictions(features_2D_3D)
         #     _, preds = torch.max(outputs, 1)
         #     # Calculate the confidence scores between 0-100% for the predictions
@@ -578,10 +578,11 @@ if __name__ == "__main__":
     with open(pred_label_fp, "w") as f:
         f.write("image_path,prediction,label,correct,confidence\n")
         for img_path, pred, label, conf in zip(file_path_list, pred_list, label_list, conf_list):
-            f.write(f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf*100, 0)}\n")
+            f.write(f"{os.path.basename(img_path)},{pred},{label},{int(pred == label)},{round(conf * 100, 0)}\n")
         # Write overall high, low and total accuracy
         f.write(f"Low bio correct,{low_correct.item()},{n_low_bio_samples.item()},{overall_val_acc_low}\n")
         f.write(f"High bio correct,{high_correct.item()},{n_high_bio_samples.item()},{overall_val_acc_high}\n")
-        f.write(f"Overall test accuracy,{low_correct.item() + high_correct.item()},{len(test_dataset)},{overall_val_acc}\n")
+        f.write(
+            f"Overall test accuracy,{low_correct.item() + high_correct.item()},{len(test_dataset)},{overall_val_acc}\n")
         f.write(f"Mean test accuracy,,,{(round(overall_val_acc_low + overall_val_acc_high) / 2, 2)}\n")
     f.close()
