@@ -33,9 +33,8 @@ class BioVista2D3D(Dataset):
         self.df = pd.read_csv(csv_file)
         self.data_root = os.path.dirname(csv_file)
         self.in_memory = in_memory
-        if in_memory:
-            self.memory_pts = {}
-            self.memory_img = {}
+        self.memory_pts = {}
+        self.memory_img = {}
 
         # General Settings
         self.test_plot_radius_meters = 15
