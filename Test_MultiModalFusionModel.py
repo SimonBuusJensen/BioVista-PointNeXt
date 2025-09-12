@@ -303,9 +303,9 @@ class MultiModalFusionModel(nn.Module):
             # Optionally adjust keys if necessary.
             # Directly load the weights into the ResNet model of the image backbone.
 
-            if state_dict["fc.bias"].shape != self.image_backbone.state_dict()["fc.bias"].shape:
-                del state_dict["fc.bias"]
-                del state_dict["fc.weight"]
+            if state_dict["resnet.fc.bias"].shape != self.image_backbone.state_dict()["resnet.fc.bias"].shape:
+                del state_dict["resnet.fc.bias"]
+                del state_dict["resnet.fc.weight"]
                 self.image_backbone.load_state_dict(state_dict, strict=False)
             else:
                 self.image_backbone.load_state_dict(state_dict)
