@@ -302,7 +302,7 @@ class MultiModalFusionModel(nn.Module):
                 resnet_weights_path, map_location=map_location)
             # Optionally adjust keys if necessary.
             # Directly load the weights into the ResNet model of the image backbone.
-            self.image_backbone.load_state_dict(state_dict)
+            self.image_backbone.load_state_dict(state_dict, strict=False)
             print("Loaded ResNet weights.")
 
         if pointvector_weights_path:
@@ -315,7 +315,7 @@ class MultiModalFusionModel(nn.Module):
             ckpt_state_dict = state_dict['model']
             base_ckpt = {k.replace("module.", ""): v for k, v in ckpt_state_dict.items()}
 
-            self.point_backbone.load_state_dict(base_ckpt)
+            self.point_backbone.load_state_dict(base_ckpt, strict=False)
             # epoch = state_dict.get('epoch', -1)
             print("Loaded PointVector-S weights.")
 
@@ -323,7 +323,7 @@ class MultiModalFusionModel(nn.Module):
             state_dict = torch.load(mlp_weights_path, map_location=map_location)
             # Optionally adjust keys if necessary.
             # Directly load the weights into the MLP model of the fusion head.
-            self.fusion_head.load_state_dict(state_dict)
+            self.fusion_head.load_state_dict(state_dict, strict=False)
             print("Loaded MLP weights.")
 
 
