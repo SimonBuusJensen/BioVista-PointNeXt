@@ -19,6 +19,9 @@ from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed, A
     load_checkpoint
 from train_classifier import str2bool
 
+from torchvision.transforms import Compose
+from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
+
 
 def setup_logger(log_file):
     logging.basicConfig(
@@ -51,7 +54,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file', default="cfgs/biovista/pointvector-s.yaml")
     parser.add_argument("--source", type=str,
-                        help="Path to an image, a directory of images or a csv file with image paths.")
+                        help="Path to csv file with image paths.")
     parser.add_argument('--resnet_weights', type=str, help='ResNet weights file', default=None)
     parser.add_argument('--pointvector_weights', type=str, help='PointVector-S weights file', default=None)
     parser.add_argument('--orthophoto_channels', type=str, help='RGB, NGB, RGBN', default="NRG")
@@ -60,6 +63,7 @@ if __name__ == "__main__":
     # Training arguments
     parser.add_argument("--epochs", type=int, help="Number of epochs to train", default=5)
     parser.add_argument("--batch_size", type=int, help="Batch size for training", default=2)
+    parser.add_argument("--grad_accum_steps", type=int, help="Gradient accumulation steps (>=1)", default=1)
     parser.add_argument("--in_memory", help="Cache whole dataset", type=str2bool, default=False)
     parser.add_argument("--num_workers", type=int, help="The number of threads for the dataloader", default=2)
     parser.add_argument("--fusion_lr", type=float, help="Learning rate", default=0.0001)
@@ -76,6 +80,7 @@ if __name__ == "__main__":
     cfg = EasyConfig()
     cfg.load(args.cfg, recursive=True)
     cfg.update(opts)
+    cfg.batch_size = args.batch_size # override
 
     experiment_id = np.random.randint(1000, 9999)
 
@@ -104,6 +109,29 @@ if __name__ == "__main__":
     log_file = os.path.join(cfg.experiment_dir, f"{experiment_name}.log")
     setup_logger(log_file)
 
+    transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
+    train_dataset = BioVista2D3D(
+        data_root=args.source, split='train', transform=transform, orthophoto_channels=args.orthophoto_channels,
+        in_memory=args.in_memory
+    )
+    train_loader = DataLoader(train_dataset,
+                              batch_size=cfg.batch_size,
+                              shuffle=True,
+                              num_workers=args.num_workers,
+                              drop_last=True)
+    # train_loader.dataset.df = train_loader.dataset.df.sample(200, random_state=cfg.seed)
+
+    val_dataset = BioVista2D3D(
+        data_root=args.source, split='val', transform=transform, orthophoto_channels=args.orthophoto_channels,
+        in_memory=args.in_memory
+    )
+    val_loader = DataLoader(val_dataset,
+                            batch_size=cfg.batch_size,
+                            shuffle=False,
+                            num_workers=args.num_workers)
+    # val_loader.dataset.df = val_loader.dataset.df.sample(200, random_state=cfg.seed)
+    cfg.num_classes = train_dataset.num_classes
+
     # Model arguments
     with_shortcut_fusion = args.with_shortcut_fusion
     assert isinstance(with_shortcut_fusion, bool), "The with_shortcut_fusion must be a boolean."
@@ -117,7 +145,8 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model = build_model_from_cfg(cfg.model).to(device)
     model = MultiModalFusionModel(
-        img_channel=img_channel, pts_channel=pts_channel, with_shortcut_fusion=with_shortcut_fusion
+        num_classes=train_dataset.num_classes, img_channel=img_channel,
+        pts_channel=pts_channel, with_shortcut_fusion=with_shortcut_fusion
     )
     model_size = cal_model_parm_nums(model)
     logging.info(f'Number of params: {(model_size / 1e6)} M')
@@ -144,41 +173,6 @@ if __name__ == "__main__":
     model.to(device)
 
     cfg.batch_size = args.batch_size
-
-    # In case batch size is greater than 8 we use gradient accumulation
-    # This technique lets us simulate a larger batch size by accumulating gradients over multiple iterations
-    if cfg.batch_size > 8:
-        assert cfg.batch_size % 8 == 0, "The batch size must be a multiple of 8."
-        with_accumulation = True
-        accumulation_steps = cfg.batch_size // 8
-        cfg.batch_size = 8
-    else:
-        with_accumulation = False
-
-    from torchvision.transforms import Compose
-    from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
-
-    transform = Compose([PointsToTensor(), PointCloudXYZAlign(normalize_gravity_dim=False)])
-    train_dataset = BioVista2D3D(
-        data_root=args.source, split='train', transform=transform, orthophoto_channels=args.orthophoto_channels,
-        in_memory=args.in_memory
-    )
-    train_loader = DataLoader(train_dataset,
-                              batch_size=cfg.batch_size,
-                              shuffle=True,
-                              num_workers=args.num_workers,
-                              drop_last=True)
-    # train_loader.dataset.df = train_loader.dataset.df.sample(200, random_state=cfg.seed)
-
-    val_dataset = BioVista2D3D(
-        data_root=args.source, split='val', transform=transform, orthophoto_channels=args.orthophoto_channels,
-        in_memory=args.in_memory
-    )
-    val_loader = DataLoader(val_dataset,
-                            batch_size=cfg.batch_size,
-                            shuffle=False,
-                            num_workers=args.num_workers)
-    # val_loader.dataset.df = val_loader.dataset.df.sample(200, random_state=cfg.seed)
 
     # Setup wandb
     assert isinstance(args.use_wandb, bool), "The use_wandb must be a boolean."
@@ -229,10 +223,12 @@ if __name__ == "__main__":
     else:
         criterion = torch.nn.CrossEntropyLoss().to(device)
 
-    best_val_overall_acc = 0.0
+    best_val_overall_acc = -1.0
+    best_epoch = -1
+    cur_best_model_fp = None
     patience = args.epochs  # Early stopping patience (will stop training if the validation accuracy does not improve after this number of epochs)
     epochs_without_improvement = 0
-    model.train()  # set model to training mode
+    accumulation_steps = max(1, int(args.grad_accum_steps))
 
     for epoch in range(1, cfg.epochs + 1):
         train_pbar = tqdm(enumerate(train_loader), total=train_loader.__len__(),
@@ -240,6 +236,8 @@ if __name__ == "__main__":
         loss_meter = AverageMeter()
         train_cm = ConfusionMatrix(num_classes=cfg.num_classes)
 
+        optimizer.zero_grad()  # ensure grads are zero at the start of each epoch
+        model.train()  # make sure we are in train model
         for idx, (fn, data) in train_pbar:
 
             for key in data.keys():
@@ -255,16 +253,13 @@ if __name__ == "__main__":
             loss = criterion(logits, target)
 
             # Dividing the loss by the accumulation steps keeps the scale of the gradients similar to what you would expect from a full batch
-            if with_accumulation:
+            if accumulation_steps > 1:
                 loss = loss / accumulation_steps
 
             loss.backward()
 
-            if with_accumulation:
-                if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(train_loader):
-                    optimizer.step()
-                    optimizer.zero_grad()
-            else:
+            # step on schedule or at the end of the loader
+            if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(train_loader):
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -322,7 +317,7 @@ if __name__ == "__main__":
                     data[key] = data[key].cuda(non_blocking=True)
                 target = data['y']
                 points = data['x']
-                points = points[:, :cfg.num_points]
+                points = points[:, :cfg.num_points] # TODO this is potentially problematic if points are sorted
                 data['pos'] = points[:, :, :3].contiguous()
                 data['x'] = points[:, :, :cfg.model.encoder_args.in_channels].transpose(1, 2).contiguous()
 
@@ -418,7 +413,10 @@ if __name__ == "__main__":
 
         scheduler.step(epoch)
 
-    test_dataset = BioVista2D3D(data_root=args.source, split='test', transform=transform, seed=cfg.seed)
+    test_dataset = BioVista2D3D(
+        data_root=args.source, split='test', transform=transform,
+        orthophoto_channels=args.orthophoto_channels, in_memory=False, seed=cfg.seed
+    )
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
     # test_loader.dataset.df = test_loader.dataset.df.sample(200, random_state=cfg.seed)
     logging.info("Successfully loaded test dataset. with {} samples".format(len(test_dataset)))

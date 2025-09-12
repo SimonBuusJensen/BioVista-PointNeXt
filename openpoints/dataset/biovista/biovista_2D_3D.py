@@ -11,8 +11,6 @@ from resnet_nir.datatransforms import set_val_data_transforms, set_train_data_tr
 
 
 class BioVista2D3D(Dataset):
-    num_classes = 2
-    classes = ['low_bio', 'high_bio']
     gravity_dim = 2
     CM_PER_PX = 12.5  # 12.5 cm per pixel in the orthophoto
 
@@ -31,6 +29,12 @@ class BioVista2D3D(Dataset):
         assert data_root.endswith('.csv')
         csv_file = data_root
         self.df = pd.read_csv(csv_file)
+        self.num_classes = 2
+        self.classes = ['low_bio', 'high_bio']
+        if len(pd.unique(self.df["class_id"])) == 3: # add medium class
+            self.num_classes += 1
+            self.classes += ['medium_bio']
+
         self.data_root = os.path.dirname(csv_file)
         self.in_memory = in_memory
         self.memory_pts = {}
