@@ -49,19 +49,6 @@ def calculate_class_weights(labels):
         [class_weights[i] for i in sorted(class_weights.keys())], dtype=torch.float)
     return class_weights_tensor
 
-def log_confmat_table(cm: ConfusionMatrix, class_names=None) -> wandb.Table:
-    mat = cm.value.detach().cpu().numpy()
-    n = mat.shape[0]
-    if class_names is None:
-        class_names = [str(i) for i in range(n)]
-
-    table = wandb.Table(columns=["actual", "predicted", "count"])
-    for i in range(n):
-        for j in range(n):
-            table.add_data(class_names[i], class_names[j], int(mat[i, j]))
-    return table
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
     parser.add_argument('--cfg', type=str, help='config file', default="cfgs/biovista/pointvector-s.yaml")
@@ -297,7 +284,7 @@ if __name__ == "__main__":
                 "train_loss": train_loss,
                 "train_macc": train_macc,
                 "train_oacc": train_oacc,
-                "train_cm": log_confmat_table(train_cm, train_dataset.classes),
+                "train_cm": train_cm.get_wandb_table(train_dataset.classes),
                 "fusion_lr": fusion_lr,
                 "backbone_lr": backbone_lr,
                 "epoch": epoch
@@ -424,7 +411,7 @@ if __name__ == "__main__":
                     "val_acc": val_macc,
                     "val_oacc": val_overall_acc,
                     "best_val_oacc": best_val_overall_acc,
-                    "val_cm": log_confmat_table(val_cm, train_dataset.classes),
+                    "val_cm": val_cm.get_wandb_table(train_dataset.classes),
                     "epoch": epoch
                 })
 
@@ -549,5 +536,5 @@ if __name__ == "__main__":
             "test_oacc": overall_test_acc,
             "test_low_bio_acc": overall_val_acc_low,
             "test_high_bio_acc": overall_val_acc_high,
-            "test_cm": log_confmat_table(test_cm, train_dataset.classes),
+            "test_cm": test_cm.get_wandb_table(train_dataset.classes),
         })
