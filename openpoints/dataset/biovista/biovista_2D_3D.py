@@ -220,8 +220,8 @@ class BioVista2D3D(Dataset):
             center_x = (np.max(points[:, 0]) + np.min(points[:, 0])) / 2
             center_y = (np.max(points[:, 1]) + np.min(points[:, 1])) / 2
             points = self.apply_circlular_mask_on_point_cloud(points, self.test_plot_radius_meters, center_x, center_y)
-
-            self.memory_pts[fn] = points
+            if self.in_memory:
+                self.memory_pts[fn] = points
 
         if self.split == 'test':
             np.random.seed(self.seed)
@@ -275,7 +275,8 @@ class BioVista2D3D(Dataset):
             # Convert to uint8
             image_array = image_array.astype(np.uint8)
 
-            self.memory_img[rgb_fn] = image_array
+            if self.in_memory:
+                self.memory_img[rgb_fn] = image_array
 
         # Apply transformations
         if self.orthophoto_transform:
