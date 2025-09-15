@@ -49,6 +49,18 @@ def calculate_class_weights(labels):
         [class_weights[i] for i in sorted(class_weights.keys())], dtype=torch.float)
     return class_weights_tensor
 
+def log_confmat_table(cm: ConfusionMatrix, class_names=None) -> wandb.Table:
+    mat = cm.value.detach().cpu().numpy()
+    n = mat.shape[0]
+    if class_names is None:
+        class_names = [str(i) for i in range(n)]
+
+    table = wandb.Table(columns=["actual", "predicted", "count"])
+    for i in range(n):
+        for j in range(n):
+            table.add_data(class_names[i], class_names[j], int(mat[i, j]))
+    return table
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
@@ -277,11 +289,15 @@ if __name__ == "__main__":
             backbone_lr = 0
             fusion_lr = optimizer.param_groups[0]['lr']
 
+
+
+
         if args.use_wandb:
             wandb.log({
                 "train_loss": train_loss,
                 "train_macc": train_macc,
                 "train_oacc": train_oacc,
+                "train_cm": log_confmat_table(train_cm, train_dataset.classes),
                 "fusion_lr": fusion_lr,
                 "backbone_lr": backbone_lr,
                 "epoch": epoch
@@ -303,7 +319,7 @@ if __name__ == "__main__":
         val_cm = ConfusionMatrix(num_classes=cfg.num_classes)
         is_best = False
 
-        with torch.set_grad_enabled(False):
+        with torch.no_grad():
             model.eval()  # set model to eval mode
             val_pred_list = []
             val_conf_list = []
@@ -408,6 +424,7 @@ if __name__ == "__main__":
                     "val_acc": val_macc,
                     "val_oacc": val_overall_acc,
                     "best_val_oacc": best_val_overall_acc,
+                    "val_cm": log_confmat_table(val_cm, train_dataset.classes),
                     "epoch": epoch
                 })
 
@@ -439,6 +456,7 @@ if __name__ == "__main__":
 
     model.eval()
     with torch.no_grad():
+        test_cm = ConfusionMatrix(num_classes=cfg.num_classes)
         for i, (fn, data) in tqdm(enumerate(test_loader), total=test_loader.__len__(), desc=f"Testing:"):
 
             for key in data.keys():
@@ -473,10 +491,12 @@ if __name__ == "__main__":
             # if not os.path.exists(_3D_feature_fp):
             #     np.save(_3D_feature_fp, _3D_features.cpu().numpy())
 
-            outputs = model(data)
-            _, preds = torch.max(outputs, 1)
+            logits = model(data)
+
+            test_cm.update(logits.argmax(dim=1), target)
+            _, preds = torch.max(logits, 1)
             # Calculate the confidence scores between 0-100% for the predictions
-            confidences = torch.nn.functional.softmax(outputs, dim=1)
+            confidences = torch.nn.functional.softmax(logits, dim=1)
             confidences = torch.max(confidences, 1)[0]
 
             overall_test_acc += torch.sum(preds == labels.data)
@@ -528,5 +548,6 @@ if __name__ == "__main__":
             "test_macc": round((overall_val_acc_low + overall_val_acc_high) / 2, 2),
             "test_oacc": overall_test_acc,
             "test_low_bio_acc": overall_val_acc_low,
-            "test_high_bio_acc": overall_val_acc_high
+            "test_high_bio_acc": overall_val_acc_high,
+            "test_cm": log_confmat_table(test_cm, train_dataset.classes),
         })
