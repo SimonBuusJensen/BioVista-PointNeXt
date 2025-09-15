@@ -1,6 +1,7 @@
 from math import log10
 import numpy as np
 import torch
+import wandb
 from sklearn.metrics import confusion_matrix
 import logging
 
@@ -164,6 +165,18 @@ class ConfusionMatrix:
         miou = torch.mean(iou_per_cls)
         macc = torch.mean(acc_per_cls)  # class accuracy
         return miou.item(), macc.item(), over_all_acc.item(), iou_per_cls.cpu().numpy(), acc_per_cls.cpu().numpy()
+
+    def get_wandb_table(self, class_names=None) -> wandb.Table:
+        mat = self.value.detach().cpu().numpy()
+        n = mat.shape[0]
+        if class_names is None:
+            class_names = [str(i) for i in range(n)]
+
+        table = wandb.Table(columns=["actual", "predicted", "count"])
+        for i in range(n):
+            for j in range(n):
+                table.add_data(class_names[i], class_names[j], int(mat[i, j]))
+        return table
 
 
 def get_mious(tp, union, count):
