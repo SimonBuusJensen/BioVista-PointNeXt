@@ -98,7 +98,7 @@ def main(gpu, cfg):
                                             )
     
     # DEBUG: Sample 500 random samples. Change the test_loader.dataset.df to a subset of the original dataset
-    test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed) # TODO: Remove this line
+    # test_loader.dataset.df = test_loader.dataset.df.sample(100, random_state=cfg.seed) # TODO: Remove this line
     logging.info(f"length of testing dataset: {len(test_loader.dataset)}")
 
     # Setup model
