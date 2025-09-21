@@ -128,7 +128,8 @@ def main(gpu, cfg):
 
     num_classes = val_loader.dataset.num_classes if hasattr(val_loader.dataset, 'num_classes') else None
     if num_classes is not None:
-        assert cfg.num_classes == num_classes
+        assert cfg.num_classes == num_classes, \
+            f"config and loader classes don't match: {cfg.num_classes} != {num_classes}"
 
     logging.info(f"number of classes of the dataset: {num_classes}, "
                  f"number of points as model input: {cfg.num_points}")
