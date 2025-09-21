@@ -11,8 +11,6 @@ import torch
 @DATASETS.register_module()
 class BioVista(Dataset):
 
-    num_classes = 2
-    classes = ['low_bio', 'high_bio']
     gravity_dim = 2
 
     def __init__(self,
@@ -31,6 +29,11 @@ class BioVista(Dataset):
         assert data_root.endswith('.csv')
         csv_file = data_root
         self.df = pd.read_csv(csv_file)
+        self.num_classes = 2
+        self.classes = ['low_bio', 'high_bio']
+        if len(pd.unique(self.df["class_id"])) == 3: # add medium class
+            self.num_classes += 1
+            self.classes += ['medium_bio']
 
         if split == "test":
             if seed is None:
