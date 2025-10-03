@@ -155,6 +155,7 @@ def main(gpu, cfg):
                 "train_loss": train_loss,
                 "train_acc": train_macc,
                 "train_oa": train_oa,
+                "train_cm": train_cm.get_wandb_table(train_loader.dataset.classes),
                 "lr": lr,
                 "epoch": epoch
             })
@@ -244,6 +245,7 @@ def main(gpu, cfg):
                     wandb.log({
                         "best_val_oacc": best_val_oa,
                         "macc_when_best": val_macc,
+                        "best_val_cm": val_cm.get_wandb_table(train_loader.dataset.classes),
                         "epoch": epoch
                     })
 
@@ -265,6 +267,7 @@ def main(gpu, cfg):
                 "val_loss": val_loss_meter.avg,  # Log validation loss to wandb
                 "val_oa": val_oa,
                 "val_macc": val_macc,
+                "val_cm": val_cm.get_wandb_table(train_dataset.classes),
                 "epoch": epoch
             })
      
@@ -349,6 +352,7 @@ def main(gpu, cfg):
             "test_macc": test_macc,
             "test_accuracy_high": high_acc,
             "test_accuracy_low": low_acc,
+            "test_cm": test_cm.get_wandb_table(train_loader.dataset.classes),
             "epoch": best_epoch
         })
 
