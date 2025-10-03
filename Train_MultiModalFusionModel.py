@@ -399,6 +399,13 @@ if __name__ == "__main__":
                     )
                     f.write(f"Mean validation accuracy,,,{val_macc}\n")
                 f.close()
+
+
+                wandb.log({
+                    "best_val_oacc": best_val_overall_acc,
+                    "best_val_cm": val_cm.get_wandb_table(train_dataset.classes),
+                    "epoch": epoch
+                })
             else:
                 epochs_without_improvement += 1
                 if epochs_without_improvement >= patience:
@@ -410,7 +417,6 @@ if __name__ == "__main__":
                 wandb.log({
                     "val_acc": val_macc,
                     "val_oacc": val_overall_acc,
-                    "best_val_oacc": best_val_overall_acc,
                     "val_cm": val_cm.get_wandb_table(train_dataset.classes),
                     "epoch": epoch
                 })
