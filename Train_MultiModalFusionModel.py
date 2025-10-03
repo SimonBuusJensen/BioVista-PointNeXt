@@ -455,7 +455,7 @@ if __name__ == "__main__":
             for key in data.keys():
                 data[key] = data[key].cuda(non_blocking=True)
 
-            labels = data['y'].to(device)
+            labels = data['y']
 
             data['pos'] = data['x'][:, :, :3].contiguous()
             data['x'] = data['x'][:, :, :4].transpose(1, 2).contiguous()
@@ -486,7 +486,7 @@ if __name__ == "__main__":
 
             logits = model(data)
 
-            test_cm.update(logits.argmax(dim=1), target)
+            test_cm.update(logits.argmax(dim=1), labels)
             _, preds = torch.max(logits, 1)
             # Calculate the confidence scores between 0-100% for the predictions
             confidences = torch.nn.functional.softmax(logits, dim=1)
