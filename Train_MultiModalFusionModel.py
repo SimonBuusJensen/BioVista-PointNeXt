@@ -10,17 +10,16 @@ import numpy as np
 import torch
 import wandb
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose
 from tqdm import tqdm
 
 from Test_MultiModalFusionModel import MultiModalFusionModel
 from openpoints.dataset import BioVista2D3D
 from openpoints.scheduler import build_scheduler_from_cfg
+from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
 from openpoints.utils import EasyConfig, cal_model_parm_nums, set_random_seed, AverageMeter, ConfusionMatrix, \
     load_checkpoint
 from train_classifier import str2bool
-
-from torchvision.transforms import Compose
-from openpoints.transforms import PointsToTensor, PointCloudXYZAlign
 
 
 def setup_logger(log_file):
@@ -48,6 +47,7 @@ def calculate_class_weights(labels):
     class_weights_tensor = torch.tensor(
         [class_weights[i] for i in sorted(class_weights.keys())], dtype=torch.float)
     return class_weights_tensor
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('S3DIS scene segmentation training')
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     cfg = EasyConfig()
     cfg.load(args.cfg, recursive=True)
     cfg.update(opts)
-    cfg.batch_size = args.batch_size # override
+    cfg.batch_size = args.batch_size  # override
 
     experiment_id = np.random.randint(1000, 9999)
 
@@ -131,6 +131,11 @@ if __name__ == "__main__":
     # val_loader.dataset.df = val_loader.dataset.df.sample(200, random_state=cfg.seed)
     cfg.num_classes = train_dataset.num_classes
 
+    cfg.fusion_lr = args.fusion_lr
+    assert cfg.fusion_lr is not None, "The fusion learning rate must be provided."
+    cfg.backbone_lr = args.backbone_lr
+    assert cfg.backbone_lr is not None, "The backbone learning rate must be provided."
+
     # Model arguments
     with_shortcut_fusion = args.with_shortcut_fusion
     assert isinstance(with_shortcut_fusion, bool), "The with_shortcut_fusion must be a boolean."
@@ -145,7 +150,8 @@ if __name__ == "__main__":
     # model = build_model_from_cfg(cfg.model).to(device)
     model = MultiModalFusionModel(
         num_classes=train_dataset.num_classes, img_channel=img_channel,
-        pts_channel=pts_channel, with_shortcut_fusion=with_shortcut_fusion
+        pts_channel=pts_channel, with_shortcut_fusion=with_shortcut_fusion,
+        freeze_backbone=cfg.backbone_lr == 0.0
     )
     model_size = cal_model_parm_nums(model)
     logging.info(f'Number of params: {(model_size / 1e6)} M')
@@ -190,11 +196,6 @@ if __name__ == "__main__":
     cfg.num_workers = args.num_workers
     if cfg.num_workers == 0:
         logging.warning("The number of workers is set to 0, which may slow down the training process.")
-
-    cfg.fusion_lr = args.fusion_lr
-    assert cfg.fusion_lr is not None, "The fusion learning rate must be provided."
-    cfg.backbone_lr = args.backbone_lr
-    assert cfg.backbone_lr is not None, "The backbone learning rate must be provided."
 
     # optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
     if args.backbone_lr > 0:
@@ -276,9 +277,6 @@ if __name__ == "__main__":
             backbone_lr = 0
             fusion_lr = optimizer.param_groups[0]['lr']
 
-
-
-
         if args.use_wandb:
             wandb.log({
                 "train_loss": train_loss,
@@ -320,7 +318,7 @@ if __name__ == "__main__":
                     data[key] = data[key].cuda(non_blocking=True)
                 target = data['y']
                 points = data['x']
-                points = points[:, :cfg.num_points] # TODO this is potentially problematic if points are sorted
+                points = points[:, :cfg.num_points]  # TODO this is potentially problematic if points are sorted
                 data['pos'] = points[:, :, :3].contiguous()
                 data['x'] = points[:, :, :cfg.model.encoder_args.in_channels].transpose(1, 2).contiguous()
 
@@ -399,7 +397,6 @@ if __name__ == "__main__":
                     )
                     f.write(f"Mean validation accuracy,,,{val_macc}\n")
                 f.close()
-
 
                 wandb.log({
                     "best_val_oacc": best_val_overall_acc,

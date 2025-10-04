@@ -12,9 +12,9 @@ dataset:
 
 num_points: 8192
 feature_keys: pos
-num_classes: 2
+num_classes: -1
 
-batch_size: 2
+batch_size: -1
 val_batch_size: 2
 
 dataloader:

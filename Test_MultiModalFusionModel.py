@@ -158,13 +158,15 @@ class MultiModalFusionModel(nn.Module):
                  num_classes: int = 2,
                  fusion_input_size: int = 1024,
                  with_shortcut_fusion: bool = False,
-                 fusion_type="concat"
+                 fusion_type="concat",
+                 freeze_backbone:bool=False,
                  ):
         super(MultiModalFusionModel, self).__init__()
 
         self.with_shortcut_fusion = with_shortcut_fusion
         logging.info(f"Shortcut fusion: {self.with_shortcut_fusion}")
         self.fusion_type = fusion_type
+        self.freeze_backbone = freeze_backbone
 
         # Instantiate image backbone.
         # Note: Here we use get_feature_encodings to get a feature vector.
@@ -212,8 +214,9 @@ class MultiModalFusionModel(nn.Module):
 
         if self.with_shortcut_fusion:
             # Multi-scale feature extraction and fusion
-            img_features_list = self.image_backbone.get_all_feature_encodings(data['img'])
-            pc_features_list = self.point_backbone.encoder.forward_all_cls_feat(data)
+            with torch.set_grad_enabled(not self.freeze_backbone):
+                img_features_list = self.image_backbone.get_all_feature_encodings(data['img'])
+                pc_features_list = self.point_backbone.encoder.forward_all_cls_feat(data)
 
             # Fuse features at each scale
             fused_256 = torch.cat([img_features_list[0], pc_features_list[0]], dim=1)
@@ -223,12 +226,14 @@ class MultiModalFusionModel(nn.Module):
             # Now, we want to forward the fused features through the MLP model
             out = self.fusion_head.forward_shortcut_fusion([fused_1024, fused_512, fused_256])
         else:
-            # Extract image features. (Assume image is (B, C, H, W))
-            image_features = self.forward_2D_feature_encodings(data['img'])
 
-            # Extract point cloud features.
-            # Here we use forward_cls_feat; ensure your point cloud data is in the expected format.
-            point_features = self.forward_3D_feature_encodings(data)
+            with torch.set_grad_enabled(not self.freeze_backbone):
+                # Extract image features. (Assume image is (B, C, H, W))
+                image_features = self.forward_2D_feature_encodings(data['img'])
+
+                # Extract point cloud features.
+                # Here we use forward_cls_feat; ensure your point cloud data is in the expected format.
+                point_features = self.forward_3D_feature_encodings(data)
 
             # Concatenate features along the feature dimension.
             fused_features = torch.cat([image_features, point_features], dim=1)
