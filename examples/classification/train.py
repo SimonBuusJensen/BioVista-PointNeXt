@@ -133,7 +133,7 @@ def main(gpu, cfg):
 
     logging.info(f"number of classes of the dataset: {num_classes}, "
                  f"number of points as model input: {cfg.num_points}")
-    
+
     cfg.classes = cfg.get('classes', None) or val_loader.dataset.classes if hasattr(val_loader.dataset, 'classes') else None or np.range(num_classes)
 
     """
@@ -155,7 +155,7 @@ def main(gpu, cfg):
                 "train_loss": train_loss,
                 "train_acc": train_macc,
                 "train_oa": train_oa,
-                "train_cm": train_cm.get_wandb_table(cfg.num_classes),
+                "train_cm": train_cm.get_wandb_table(train_loader.dataset.classes),
                 "lr": lr,
                 "epoch": epoch
             })
@@ -267,7 +267,7 @@ def main(gpu, cfg):
                 "val_loss": val_loss_meter.avg,  # Log validation loss to wandb
                 "val_oa": val_oa,
                 "val_macc": val_macc,
-                "val_cm": val_cm.get_wandb_table(cfg.num_classes),
+                "val_cm": val_cm.get_wandb_table(train_loader.dataset.classes),
                 "epoch": epoch
             })
      
